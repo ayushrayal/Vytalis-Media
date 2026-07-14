@@ -5,6 +5,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { CreativeCardSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, Image as ImageIcon, Video, Layers, Search, Eye, Filter, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import CreativeImage from '../components/CreativeImage';
 
 const CreativeGallery = () => {
   const { datePreset, customRange, refreshTrigger, globalSearch, setGlobalSearch } = useDashboard();
@@ -210,35 +211,29 @@ const CreativeGallery = () => {
               >
                 {/* Media Preview container */}
                 <div style={{ height: '220px', background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden' }}>
-                  {creative.isVideo ? (
-                    <>
-                      <img
-                        src={creative.imageUrl || creative.thumbnailUrl}
-                        alt={creative.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                      <div style={{
-                        position: 'absolute',
-                        top: '10px',
-                        left: '10px',
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'rgba(0,0,0,0.6)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff'
-                      }}>
-                        <Video size={14} />
-                      </div>
-                    </>
-                  ) : (
-                    <img
-                      src={creative.imageUrl || '/placeholder.png'}
-                      alt={creative.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
+                  <CreativeImage
+                    src={creative.imageUrl || creative.thumbnailUrl}
+                    alt={creative.name}
+                    isVideo={creative.isVideo}
+                    aspectRatio="auto"
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                  {creative.isVideo && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '10px',
+                      left: '10px',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(0,0,0,0.6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff'
+                    }}>
+                      <Video size={14} />
+                    </div>
                   )}
 
                   {/* Absolute Badge elements */}

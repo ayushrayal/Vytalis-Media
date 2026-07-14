@@ -3,15 +3,37 @@ import CacheService from './cacheService.js';
 
 class MediaService {
   /**
+   * Check if a Meta CDN URL is expired or near expiration (by parsing the hex 'oe' parameter)
+   */
+  static isUrlExpired(url) {
+    if (!url) return true;
+    try {
+      const urlObj = new URL(url);
+      const oe = urlObj.searchParams.get('oe');
+      if (!oe) return false; // If no 'oe' param, assume it does not expire
+      const expireTimestamp = parseInt(oe, 16);
+      const currentTimestamp = Math.floor(Date.now() / 1000);
+      // If it expires in less than 2 hours (7200 seconds), treat it as expired so we refresh it
+      return (expireTimestamp - currentTimestamp) < 7200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
    * Resolve highest-resolution thumbnail for a Meta Video ID
    */
   static async getVideoThumbnail(videoId, user) {
     if (!videoId) return null;
 
-    // Check CacheService first (cache for 24h since video thumbnails don't change)
     const cacheKey = `video_thumb::${videoId}`;
     const cached = CacheService.get(cacheKey);
-    if (cached) return cached;
+    if (cached && !this.isUrlExpired(cached)) {
+      return cached;
+    }
+    if (cached) {
+      CacheService.delete(cacheKey);
+    }
 
     try {
       const response = await MetaService.get(videoId, user, {
@@ -47,20 +69,48 @@ class MediaService {
    */
   static async enrichCreativeAssets(creatives, user) {
     const enriched = await Promise.all(creatives.map(async (creative) => {
-      let mediaUrl = creative.image_url || creative.thumbnail_url || null;
-      let isVideo = !!creative.video_id;
+      let currentCreative = { ...creative };
+      let mediaUrl = currentCreative.image_url || currentCreative.thumbnail_url || null;
 
-      // Only query getVideoThumbnail if mediaUrl is not already present
-      if (isVideo && creative.video_id && !mediaUrl) {
-        const videoThumb = await this.getVideoThumbnail(creative.video_id, user);
+      // Auto-refresh expired URLs or fetch missing ones
+      if (!mediaUrl || this.isUrlExpired(mediaUrl)) {
+        try {
+          const fresh = await MetaService.get(creative.id, user, {
+            fields: 'image_url,thumbnail_url,video_id,body,object_story_spec'
+          });
+          if (fresh) {
+            currentCreative = { ...currentCreative, ...fresh };
+            mediaUrl = fresh.image_url || fresh.thumbnail_url || null;
+          }
+        } catch (err) {
+          console.warn(`[MediaService] Failed to refetch creative details for ${creative.id}:`, err.message);
+        }
+      }
+
+      // Check carousel_spec child attachments if mediaUrl is still missing
+      const spec = currentCreative.object_story_spec;
+      if (!mediaUrl && spec) {
+        const childAttachments = spec.link_data?.child_attachments || spec.carousel_spec?.child_attachments;
+        if (Array.isArray(childAttachments) && childAttachments.length > 0) {
+          const firstPic = childAttachments.find(att => att.picture)?.picture;
+          if (firstPic) {
+            mediaUrl = firstPic;
+          }
+        }
+      }
+
+      let isVideo = !!currentCreative.video_id;
+
+      // Resolve video thumbnail if video and mediaUrl is missing or expired
+      if (isVideo && currentCreative.video_id && (!mediaUrl || this.isUrlExpired(mediaUrl))) {
+        const videoThumb = await this.getVideoThumbnail(currentCreative.video_id, user);
         if (videoThumb) {
           mediaUrl = videoThumb;
         }
       }
 
       // Extract body text copy from body field or fallback to object_story_spec if available
-      let copyText = creative.body || '';
-      const spec = creative.object_story_spec;
+      let copyText = currentCreative.body || '';
       if (spec && !copyText) {
         copyText = spec.link_data?.message || 
                    spec.video_data?.message || 
@@ -70,12 +120,14 @@ class MediaService {
       }
 
       return {
-        id: creative.id,
-        name: creative.name,
+        id: currentCreative.id,
+        name: currentCreative.name,
         isVideo,
         mediaUrl,
+        imageUrl: mediaUrl, // Map to imageUrl for frontend consistency
+        thumbnailUrl: mediaUrl, // Map to thumbnailUrl for frontend consistency
         copyText,
-        video_id: creative.video_id
+        video_id: currentCreative.video_id
       };
     }));
 

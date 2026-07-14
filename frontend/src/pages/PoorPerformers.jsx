@@ -5,6 +5,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { CreativeCardSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, AlertTriangle, Video } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import CreativeImage from '../components/CreativeImage';
 
 const PoorPerformers = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -96,10 +97,12 @@ const PoorPerformers = () => {
                 }}
               >
                 <div style={{ height: '220px', background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden' }}>
-                  <img
-                    src={creative.imageUrl || creative.thumbnailUrl || '/placeholder.png'}
+                  <CreativeImage
+                    src={creative.imageUrl || creative.thumbnailUrl}
                     alt={creative.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    isVideo={creative.isVideo}
+                    aspectRatio="auto"
+                    style={{ width: '100%', height: '100%' }}
                   />
                   {creative.isVideo && (
                     <div style={{ position: 'absolute', top: '10px', left: '10px', width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>

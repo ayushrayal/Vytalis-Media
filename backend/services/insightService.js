@@ -31,6 +31,44 @@ class InsightService {
   }
 
   /**
+   * Extract add to cart events without double-counting (prioritize standard 'add_to_cart', fallback to pixel add to cart)
+   */
+  static getAddToCartActions(actions) {
+    if (!actions || !Array.isArray(actions)) return 0;
+
+    const standardAction = actions.find(a => a.action_type === 'add_to_cart');
+    if (standardAction) {
+      return parseFloat(standardAction.value || 0);
+    }
+
+    const pixelAction = actions.find(a => a.action_type === 'offsite_conversion.fb_pixel_add_to_cart');
+    if (pixelAction) {
+      return parseFloat(pixelAction.value || 0);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Extract initiate checkout events without double-counting (prioritize standard 'initiate_checkout', fallback to pixel checkout)
+   */
+  static getInitiateCheckoutActions(actions) {
+    if (!actions || !Array.isArray(actions)) return 0;
+
+    const standardAction = actions.find(a => a.action_type === 'initiate_checkout');
+    if (standardAction) {
+      return parseFloat(standardAction.value || 0);
+    }
+
+    const pixelAction = actions.find(a => a.action_type === 'offsite_conversion.fb_pixel_initiate_checkout');
+    if (pixelAction) {
+      return parseFloat(pixelAction.value || 0);
+    }
+
+    return 0;
+  }
+
+  /**
    * Helper to parse specific video action arrays (e.g., video_thruplay_watched_actions)
    */
   static getVideoActionValue(fieldData) {

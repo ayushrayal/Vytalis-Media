@@ -10,7 +10,7 @@ class CampaignService {
     const endpoint = `${formattedAccountId}/campaigns`;
     
     const params = {
-      fields: 'id,name,status,objective,daily_budget,lifetime_budget,budget_remaining,buying_type',
+      fields: 'id,name,status,objective,daily_budget,lifetime_budget,budget_remaining,buying_type,start_time,stop_time,created_time,updated_time',
       limit: 1000
     };
 
@@ -19,6 +19,16 @@ class CampaignService {
     // Filter campaigns by OUTCOME_SALES objective only (ignore others as required)
     const campaigns = response.data || [];
     return campaigns.filter(c => c.objective === 'OUTCOME_SALES');
+  }
+
+  /**
+   * Fetch details for a single campaign
+   */
+  static async getCampaignById(user, campaignId) {
+    const params = {
+      fields: 'id,name,status,objective,daily_budget,lifetime_budget,budget_remaining,buying_type,start_time,stop_time,created_time,updated_time'
+    };
+    return await MetaService.get(campaignId, user, params);
   }
 }
 

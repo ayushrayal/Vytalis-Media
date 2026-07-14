@@ -7,6 +7,7 @@ import ErrorService from './services/errorService.js';
 // Import routers (will be created in upcoming steps)
 import authRouter from './routes/auth.js';
 import dashboardRouter from './routes/dashboard.js';
+import campaignRouter from './routes/campaigns.js';
 import creativeRouter from './routes/creative.js';
 import aiRouter from './routes/ai.js';
 
@@ -35,6 +36,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/campaigns', campaignRouter);
 app.use('/api/creatives', creativeRouter);
 app.use('/api/analysis', aiRouter);
 

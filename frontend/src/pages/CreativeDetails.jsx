@@ -5,6 +5,7 @@ import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, ArrowLeft, Video, Sparkles, AlertTriangle, ShieldCheck, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import CreativeImage from '../components/CreativeImage';
 
 const CreativeDetails = () => {
   const { id: creativeId } = useParams();
@@ -132,24 +133,16 @@ const CreativeDetails = () => {
         {/* Media Box & Ad Copy */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-tertiary)', position: 'relative' }}>
-            {creative.isVideo ? (
-              <div style={{ position: 'relative', width: '100%', height: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <img
-                  src={creative.imageUrl || creative.thumbnailUrl || '/placeholder.png'}
-                  alt={creative.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
-                <div style={{ position: 'absolute', bottom: '15px', right: '15px', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.7)', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <Video size={14} /> Video Preview
-                </div>
-              </div>
-            ) : (
-              <div style={{ width: '100%', height: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <img
-                  src={creative.imageUrl || '/placeholder.png'}
-                  alt={creative.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
+            <CreativeImage
+              src={creative.imageUrl || creative.thumbnailUrl}
+              alt={creative.name}
+              isVideo={creative.isVideo}
+              aspectRatio="auto"
+              style={{ width: '100%', height: '360px' }}
+            />
+            {creative.isVideo && (
+              <div style={{ position: 'absolute', bottom: '15px', right: '15px', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.7)', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Video size={14} /> Video Preview
               </div>
             )}
           </div>

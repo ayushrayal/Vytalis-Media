@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { AlertCircle, Monitor } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import CreativeImage from '../components/CreativeImage';
 
 const StaticAnalysis = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -145,8 +146,13 @@ const StaticAnalysis = () => {
                     className="table-row-hover"
                   >
                     <td style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '4px', background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-                        <img src={row.imageUrl} alt={row.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ width: '40px', height: '40px', borderRadius: '4px', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+                        <CreativeImage
+                          src={row.imageUrl}
+                          alt={row.name}
+                          isVideo={false}
+                          aspectRatio="1/1"
+                        />
                       </div>
                       <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{row.name}</span>
                     </td>

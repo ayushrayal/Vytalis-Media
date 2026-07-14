@@ -28,6 +28,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { formatCurrency, formatCompact } from '../utils/formatter';
+import MetricCard from '../components/MetricCard';
+import MetricDetailsModal from '../components/MetricDetailsModal';
 
 const Dashboard = () => {
   const {
@@ -45,6 +47,7 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [trends, setTrends] = useState([]);
+  const [selectedMetric, setSelectedMetric] = useState(null);
 
   // Fetch overview KPIs
   const fetchOverview = useCallback(async () => {
@@ -59,13 +62,14 @@ const Dashboard = () => {
       const response = await axios.get(url);
       setData(response.data.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch dashboard overview metrics.');
+      console.error('Failed to fetch overview metrics:', err);
+      setError(err.response?.data?.message || 'Failed to load dashboard overview KPIs.');
     } finally {
       setLoading(false);
     }
   }, [datePreset, customRange, refreshTrigger]);
 
-  // Fetch trend line data
+  // Fetch trend timelines
   const fetchTrends = useCallback(async () => {
     setLoadingTrends(true);
     try {
@@ -125,27 +129,10 @@ const Dashboard = () => {
     window.print();
   };
 
-  // Formatter utilities are imported from ../utils/formatter.js
-
   // Render KPI Card
   const renderKpiCard = (title, key, icon, isCurrency = false, isPercent = false) => {
     if (!data?.kpis || !data.kpis[key]) return null;
     const kpi = data.kpis[key];
-    const Icon = icon;
-
-    // Determine color coding
-    const isImproved = kpi.status === 'improved';
-    const isDeclined = kpi.status === 'declined';
-    
-    let badgeColor = 'var(--text-tertiary)';
-    let badgeBg = 'var(--bg-tertiary)';
-    if (isImproved) {
-      badgeColor = 'var(--success)';
-      badgeBg = 'var(--success-light)';
-    } else if (isDeclined) {
-      badgeColor = 'var(--danger)';
-      badgeBg = 'var(--danger-light)';
-    }
 
     let displayVal = kpi.current;
     if (isCurrency) displayVal = formatCurrency(kpi.current);
@@ -160,53 +147,28 @@ const Dashboard = () => {
     else displayPrev = formatCompact(kpi.previous);
 
     return (
-      <div className="card fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{title}</span>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--bg-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--primary)'
-          }}>
-            <Icon size={16} />
-          </div>
-        </div>
-
-        <div style={{ marginTop: '0.25rem' }}>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>
-            {displayVal}
-          </h2>
-        </div>
-
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          fontSize: '0.75rem',
-          marginTop: 'auto',
-          flexWrap: 'wrap'
-        }}>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            padding: '0.15rem 0.5rem',
-            borderRadius: 'var(--radius-full)',
-            background: badgeBg,
-            color: badgeColor,
-            fontWeight: 700
-          }}>
-            {kpi.direction === 'up' ? <TrendingUp size={12} /> : kpi.direction === 'down' ? <TrendingDown size={12} /> : null}
-            {kpi.pct.toFixed(1)}%
-          </span>
-          <span style={{ color: 'var(--text-tertiary)' }}>vs {displayPrev} prev</span>
-        </div>
-      </div>
+      <MetricCard
+        key={key}
+        title={title}
+        value={displayVal}
+        previousValue={displayPrev}
+        pct={kpi.pct}
+        direction={kpi.direction}
+        status={kpi.status}
+        icon={icon}
+        isCurrency={isCurrency}
+        isPercent={isPercent}
+        onClick={() => setSelectedMetric({
+          key,
+          title,
+          currentValue: displayVal,
+          previousValue: displayPrev,
+          pct: kpi.pct,
+          direction: kpi.direction,
+          isCurrency,
+          isPercent
+        })}
+      />
     );
   };
 
@@ -458,6 +420,22 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {selectedMetric && (
+        <MetricDetailsModal
+          isOpen={!!selectedMetric}
+          onClose={() => setSelectedMetric(null)}
+          metricKey={selectedMetric.key}
+          metricTitle={selectedMetric.title}
+          currentValue={selectedMetric.currentValue}
+          previousValue={selectedMetric.previousValue}
+          pct={selectedMetric.pct}
+          direction={selectedMetric.direction}
+          isCurrency={selectedMetric.isCurrency}
+          isPercent={selectedMetric.isPercent}
+          startDateStr={data?.dateRange?.since}
+        />
+      )}
 
       <style>{`
         @media (min-width: 1024px) {

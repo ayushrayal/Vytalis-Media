@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { AlertCircle, Video, Play } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import CreativeImage from '../components/CreativeImage';
 
 const VideoAnalysis = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -144,11 +145,13 @@ const VideoAnalysis = () => {
                     className="table-row-hover"
                   >
                     <td style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '4px', background: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-                        <img src={row.thumbnailUrl || row.imageUrl} alt={row.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyCenter: 'center', background: 'rgba(0,0,0,0.3)', color: '#fff' }}>
-                          <Play size={10} style={{ margin: 'auto' }} />
-                        </div>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '4px', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+                        <CreativeImage
+                          src={row.thumbnailUrl || row.imageUrl}
+                          alt={row.name}
+                          isVideo={true}
+                          aspectRatio="1/1"
+                        />
                       </div>
                       <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{row.name}</span>
                     </td>
