@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
   X, Info, Calendar, TrendingUp, Sparkles, Award, BarChart2,
@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Shimmer, TableSkeleton } from './LoadingSkeleton';
 import CreativeImage from './CreativeImage';
+import SectionError from './SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatter';
 import {
   ResponsiveContainer, ComposedChart, Area, XAxis, YAxis,
@@ -46,7 +48,25 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
     recommendations: null
   });
 
-  // 1. Initial overview data fetch
+  // 1. Initial overview data fetch (Memoized Callback)
+  const fetchDetails = useCallback(async () => {
+    if (!campaignId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      setData(response.data.data);
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [campaignId, datePreset, customRange]);
+
   useEffect(() => {
     if (!isOpen || !campaignId) return;
 
@@ -72,54 +92,38 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
       adsets: null,
       recommendations: null
     });
-    setLoading(true);
-    setError(null);
     setActiveTab('overview');
 
-    const fetchDetails = async () => {
-      try {
-        let url = `http://localhost:5000/api/campaigns/${campaignId}?datePreset=${datePreset}`;
-        if (datePreset === 'custom' && customRange?.since && customRange?.until) {
-          url += `&since=${customRange.since}&until=${customRange.until}`;
-        }
-        const response = await axios.get(url);
-        setData(response.data.data);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to load campaign detailed reports.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDetails();
-  }, [isOpen, campaignId, datePreset, customRange]);
+  }, [isOpen, campaignId, fetchDetails]);
 
-  // 2. Lazy load specific tab data on-demand
+  // 2. Lazy load specific tab data on-demand (Memoized Callback)
+  const fetchTab = useCallback(async (tabName, endpoint, force = false) => {
+    if (!campaignId) return;
+    if (!force && (tabData[tabName] || tabLoading[tabName])) return;
+
+    setTabLoading(prev => ({ ...prev, [tabName]: true }));
+    setTabError(prev => ({ ...prev, [tabName]: null }));
+
+    try {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}/${endpoint}?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      setTabData(prev => ({ ...prev, [tabName]: response.data.data }));
+    } catch (err) {
+      setTabError(prev => ({
+        ...prev,
+        [tabName]: getFriendlyErrorMessage(err)
+      }));
+    } finally {
+      setTabLoading(prev => ({ ...prev, [tabName]: false }));
+    }
+  }, [campaignId, datePreset, customRange, tabData, tabLoading]);
+
   useEffect(() => {
     if (!isOpen || !campaignId || !data) return;
-
-    const fetchTab = async (tabName, endpoint) => {
-      if (tabData[tabName] || tabLoading[tabName]) return;
-
-      setTabLoading(prev => ({ ...prev, [tabName]: true }));
-      setTabError(prev => ({ ...prev, [tabName]: null }));
-
-      try {
-        let url = `http://localhost:5000/api/campaigns/${campaignId}/${endpoint}?datePreset=${datePreset}`;
-        if (datePreset === 'custom' && customRange?.since && customRange?.until) {
-          url += `&since=${customRange.since}&until=${customRange.until}`;
-        }
-        const response = await axios.get(url);
-        setTabData(prev => ({ ...prev, [tabName]: response.data.data }));
-      } catch (err) {
-        setTabError(prev => ({
-          ...prev,
-          [tabName]: err.response?.data?.message || `Failed to load ${tabName} data.`
-        }));
-      } finally {
-        setTabLoading(prev => ({ ...prev, [tabName]: false }));
-      }
-    };
 
     if (activeTab === 'performance' || activeTab === 'timeline') {
       fetchTab('trends', 'trends');
@@ -132,7 +136,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
     } else if (activeTab === 'recommendations') {
       fetchTab('recommendations', 'recommendations');
     }
-  }, [isOpen, campaignId, datePreset, customRange, activeTab, data]);
+  }, [isOpen, campaignId, datePreset, customRange, activeTab, data, fetchTab]);
 
   if (!isOpen) return null;
 
@@ -315,13 +319,6 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
 
         {/* Scrollable Content Area */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
-          {error && (
-            <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertTriangle size={18} />
-              <span>{error}</span>
-            </div>
-          )}
-
           {/* Render warnings inline */}
           {warnings.length > 0 && (
             <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid var(--warning)', color: 'var(--warning)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -337,7 +334,13 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
             </div>
           )}
 
-          {loading ? (
+          {error ? (
+            <SectionError
+              message={error}
+              onRetry={fetchDetails}
+              isRetrying={loading}
+            />
+          ) : loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <TableSkeleton rows={4} />
             </div>
@@ -458,10 +461,11 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                       <TableSkeleton rows={3} />
                     </div>
                   ) : tabError.trends ? (
-                    <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={14} />
-                      <span>{tabError.trends}</span>
-                    </div>
+                    <SectionError
+                      message={tabError.trends}
+                      onRetry={() => fetchTab('trends', 'trends', true)}
+                      isRetrying={tabLoading.trends}
+                    />
                   ) : tabData.trends?.length > 0 ? (
                     <div className="card" style={{ height: '300px', display: 'flex', flexDirection: 'column', padding: '1.25rem', gap: '0.75rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -501,10 +505,11 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   {tabLoading.adsets ? (
                     <TableSkeleton rows={4} />
                   ) : tabError.adsets ? (
-                    <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={14} />
-                      <span>{tabError.adsets}</span>
-                    </div>
+                    <SectionError
+                      message={tabError.adsets}
+                      onRetry={() => fetchTab('adsets', 'adsets', true)}
+                      isRetrying={tabLoading.adsets}
+                    />
                   ) : tabData.adsets?.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {tabData.adsets.map((adSet) => {
@@ -609,10 +614,11 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   {tabLoading.creatives ? (
                     <TableSkeleton rows={3} />
                   ) : tabError.creatives ? (
-                    <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={14} />
-                      <span>{tabError.creatives}</span>
-                    </div>
+                    <SectionError
+                      message={tabError.creatives}
+                      onRetry={() => fetchTab('creatives', 'creatives', true)}
+                      isRetrying={tabLoading.creatives}
+                    />
                   ) : tabData.creatives?.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                       {tabData.creatives.map((creative) => (
@@ -685,10 +691,11 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   {tabLoading.breakdowns ? (
                     <TableSkeleton rows={4} />
                   ) : tabError.breakdowns ? (
-                    <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={14} />
-                      <span>{tabError.breakdowns}</span>
-                    </div>
+                    <SectionError
+                      message={tabError.breakdowns}
+                      onRetry={() => fetchTab('breakdowns', 'breakdowns', true)}
+                      isRetrying={tabLoading.breakdowns}
+                    />
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
@@ -734,10 +741,11 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   {tabLoading.trends ? (
                     <TableSkeleton rows={4} />
                   ) : tabError.trends ? (
-                    <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={14} />
-                      <span>{tabError.trends}</span>
-                    </div>
+                    <SectionError
+                      message={tabError.trends}
+                      onRetry={() => fetchTab('trends', 'trends', true)}
+                      isRetrying={tabLoading.trends}
+                    />
                   ) : tabData.trends?.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {tabData.trends.slice().reverse().map((day, idx) => (
@@ -762,10 +770,11 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   {tabLoading.recommendations ? (
                     <TableSkeleton rows={3} />
                   ) : tabError.recommendations ? (
-                    <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={14} />
-                      <span>{tabError.recommendations}</span>
-                    </div>
+                    <SectionError
+                      message={tabError.recommendations}
+                      onRetry={() => fetchTab('recommendations', 'recommendations', true)}
+                      isRetrying={tabLoading.recommendations}
+                    />
                   ) : tabData.recommendations?.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {tabData.recommendations.map((item, idx) => {

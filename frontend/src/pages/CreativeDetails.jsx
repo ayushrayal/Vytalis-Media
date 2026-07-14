@@ -124,10 +124,7 @@ const CreativeDetails = () => {
         display: 'grid',
         gridTemplateColumns: '1fr',
         gap: '2.5rem',
-        marginBottom: '2.5rem',
-        '@media (min-width: 1024px)': {
-          gridTemplateColumns: '1.2fr 1.8fr'
-        }
+        marginBottom: '2.5rem'
       }} id="creative-details-grid">
         
         {/* Media Box & Ad Copy */}

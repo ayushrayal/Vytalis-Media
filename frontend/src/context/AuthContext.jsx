@@ -9,7 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [metaTokenError, setMetaTokenError] = useState(null); // Alert state for Meta API token issues
 
-  // Configure Axios globally
+  // Synchronize token state with localStorage and Axios defaults
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -19,6 +19,24 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
     }
   }, [token]);
+
+  // Request interceptor to attach bearer token dynamically
+  useEffect(() => {
+    const requestInterceptor = axios.interceptors.request.use(
+      (config) => {
+        const storedToken = localStorage.getItem('token');
+        if (storedToken) {
+          config.headers['Authorization'] = `Bearer ${storedToken}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    return () => {
+      axios.interceptors.request.eject(requestInterceptor);
+    };
+  }, []);
 
   // Handle Axios response interceptors to capture expired tokens
   useEffect(() => {
@@ -35,7 +53,7 @@ export const AuthProvider = ({ children }) => {
         }
         
         // If 401 unauthorized from our own backend, log out user
-        if (error.response?.status === 401 && errorData?.errorType === 'UNAUTHORIZED') {
+        if (error.response?.status === 401) {
           logout(false);
         }
 

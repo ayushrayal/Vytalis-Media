@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Sparkles, Video, MessageSquare, AlertTriangle, FileText, Send } from 'lucide-react';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const AIInsights = () => {
   const [activeTab, setActiveTab] = useState('script'); // 'script' or 'hooks'
@@ -36,7 +37,7 @@ const AIInsights = () => {
       });
       setScriptResult(response.data.data.script);
     } catch (err) {
-      setScriptError(err.response?.data?.message || 'Failed to generate UGC script concept.');
+      setScriptError(getFriendlyErrorMessage(err));
     } finally {
       setScriptLoading(false);
     }
@@ -57,7 +58,7 @@ const AIInsights = () => {
       });
       setHooksResult(response.data.data.hooks);
     } catch (err) {
-      setHooksError(err.response?.data?.message || 'Failed to generate copy hooks.');
+      setHooksError(getFriendlyErrorMessage(err));
     } finally {
       setHooksLoading(false);
     }
@@ -128,10 +129,7 @@ const AIInsights = () => {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr',
-          gap: '2rem',
-          '@media (min-width: 1024px)': {
-            gridTemplateColumns: '1fr 1fr'
-          }
+          gap: '2rem'
         }} id="ai-script-grid">
           {/* Inputs form */}
           <div className="card fade-in">
@@ -236,10 +234,7 @@ const AIInsights = () => {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr',
-          gap: '2rem',
-          '@media (min-width: 1024px)': {
-            gridTemplateColumns: '1fr 1fr'
-          }
+          gap: '2rem'
         }} id="ai-hooks-grid">
           {/* Inputs form */}
           <div className="card fade-in">

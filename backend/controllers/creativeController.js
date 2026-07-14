@@ -6,6 +6,7 @@ import DateHelper from '../utils/dateHelper.js';
 import FilterService from '../services/filterService.js';
 import RecommendationService from '../services/recommendationService.js';
 import MetaService from '../services/metaService.js';
+import MediaService from '../services/mediaService.js';
 
 class CreativeController {
   /**
@@ -118,6 +119,8 @@ class CreativeController {
         }
       });
     } catch (error) {
+      error.controller = 'CreativeController';
+      error.service = 'CreativeService/InsightService';
       next(error);
     }
   }
@@ -171,7 +174,7 @@ class CreativeController {
       }
 
       // Run enrich to populate headline, cta, landingPage, productName, createdDate
-      const enriched = await CreativeService.enrichCreativeAssets([creative], user);
+      const enriched = await MediaService.enrichCreativeAssets([creative], user);
       const result = enriched[0];
 
       CacheService.set(cacheKey, result, 600); // basic info changes rarely, cache longer
@@ -185,6 +188,8 @@ class CreativeController {
         }
       });
     } catch (error) {
+      error.controller = 'CreativeController';
+      error.service = 'CreativeService/MediaService';
       next(error);
     }
   }
@@ -243,6 +248,8 @@ class CreativeController {
         }
       });
     } catch (error) {
+      error.controller = 'CreativeController';
+      error.service = 'CreativeService/InsightService';
       next(error);
     }
   }
@@ -352,6 +359,8 @@ class CreativeController {
         }
       });
     } catch (error) {
+      error.controller = 'CreativeController';
+      error.service = 'CreativeService/MetaService';
       next(error);
     }
   }
@@ -415,6 +424,8 @@ class CreativeController {
         }
       });
     } catch (error) {
+      error.controller = 'CreativeController';
+      error.service = 'CreativeService/InsightService/RecommendationService';
       next(error);
     }
   }

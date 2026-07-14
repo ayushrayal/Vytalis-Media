@@ -10,6 +10,8 @@ class CacheService {
     this.pendingPromises = new Map();
     // Default TTL of 5 minutes (300 seconds)
     this.DEFAULT_TTL = 300;
+    this.hits = 0;
+    this.misses = 0;
   }
 
   /**
@@ -28,6 +30,7 @@ class CacheService {
    */
   get(key) {
     if (!this.cache.has(key)) {
+      this.misses++;
       return null;
     }
 
@@ -36,9 +39,11 @@ class CacheService {
     // If expired, delete and return null
     if (Date.now() > expiresAt) {
       this.cache.delete(key);
+      this.misses++;
       return null;
     }
 
+    this.hits++;
     return value;
   }
 

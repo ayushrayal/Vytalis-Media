@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import DebouncedInput from '../components/debouncedInput';
 import CampaignDetailsDrawer from '../components/CampaignDetailsDrawer';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatter';
 
 const Campaigns = () => {
@@ -42,7 +44,7 @@ const Campaigns = () => {
       setTotal(pag.total || 0);
       setTotalPages(pag.totalPages || 1);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch campaigns.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -130,19 +132,11 @@ const Campaigns = () => {
       </div>
 
       {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
+        <SectionError
+          message={error}
+          onRetry={fetchCampaigns}
+          isRetrying={loading}
+        />
       )}
 
       {/* Filters Toolbar */}

@@ -17,6 +17,8 @@ import {
 } from 'recharts';
 import { AlertCircle, MapPin } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const PlacementReports = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -36,7 +38,7 @@ const PlacementReports = () => {
       const response = await axios.get(url);
       setPlacementData(response.data.data.placement || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch placement breakdowns.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -82,20 +84,11 @@ const PlacementReports = () => {
       </div>
 
       {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
+        <SectionError
+          message={error}
+          onRetry={fetchBreakdowns}
+          isRetrying={loading}
+        />
       )}
 
       {loading ? (
@@ -112,10 +105,7 @@ const PlacementReports = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr',
-            gap: '2rem',
-            '@media (min-width: 1024px)': {
-              gridTemplateColumns: '1fr 1fr'
-            }
+            gap: '2rem'
           }} id="placement-charts-grid">
             
             {/* Pie Chart: Spend share */}

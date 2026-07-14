@@ -73,8 +73,8 @@ class MediaService {
       let currentCreative = { ...creative };
       let initialMedia = currentCreative.image_url || currentCreative.thumbnail_url || null;
 
-      // Auto-refresh expired URLs or fetch missing ones
-      if (!initialMedia || this.isUrlExpired(initialMedia)) {
+      // Auto-refresh expired URLs or fetch missing details/specs
+      if (!initialMedia || this.isUrlExpired(initialMedia) || !currentCreative.object_story_spec) {
         try {
           const fresh = await MetaService.get(creative.id, user, {
             fields: creativeFields.join(',')

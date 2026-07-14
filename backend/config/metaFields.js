@@ -31,7 +31,7 @@ export const adFields = [
   'created_time',
   'campaign{id,name,objective}',
   'adset{id,name}',
-  'creative{id,name,image_url,thumbnail_url,video_id,body,object_story_spec,asset_feed_spec,product_set_id}'
+  'creative{id,name,image_url,thumbnail_url,video_id,body,product_set_id}'
 ];
 
 export const creativeFields = [

@@ -3,6 +3,8 @@ import axios from 'axios';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, Layers, Search } from 'lucide-react';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const Adsets = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -45,7 +47,7 @@ const Adsets = () => {
 
       setAdsets(Object.values(adsetsMap));
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to compile ad sets.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -77,20 +79,11 @@ const Adsets = () => {
       </div>
 
       {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
+        <SectionError
+          message={error}
+          onRetry={fetchAdsets}
+          isRetrying={loading}
+        />
       )}
 
       {/* Search Input bar */}

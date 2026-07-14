@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { X, Award, BarChart2, Calendar, Sparkles, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from 'lucide-react';
 import CreativeImage from './CreativeImage';
 import { Shimmer } from './LoadingSkeleton';
+import SectionError from './SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatter';
 import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line } from 'recharts';
 
@@ -35,86 +37,93 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
     setActiveTab('info');
   }, [creativeId]);
 
+  // Progressive fetching callbacks
+  const fetchBasic = useCallback(async (force = false) => {
+    if (!creativeId) return;
+    if (!force && basicData) return;
+    setLoadingBasic(true);
+    setBasicError(null);
+    try {
+      const response = await axios.get(`http://localhost:5000/api/creatives/${creativeId}`);
+      setBasicData(response.data.data);
+    } catch (err) {
+      setBasicError(getFriendlyErrorMessage(err));
+    } finally {
+      setLoadingBasic(false);
+    }
+  }, [creativeId, basicData]);
+
+  const fetchPerf = useCallback(async (force = false) => {
+    if (!creativeId) return;
+    if (!force && perfData) return;
+    setLoadingPerf(true);
+    setPerfError(null);
+    try {
+      let url = `http://localhost:5000/api/creatives/${creativeId}/performance?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      setPerfData(response.data.data);
+    } catch (err) {
+      setPerfError(getFriendlyErrorMessage(err));
+    } finally {
+      setLoadingPerf(false);
+    }
+  }, [creativeId, datePreset, customRange, perfData]);
+
+  const fetchTimeline = useCallback(async (force = false) => {
+    if (!creativeId) return;
+    if (!force && timelineData) return;
+    setLoadingTimeline(true);
+    setTimelineError(null);
+    try {
+      let url = `http://localhost:5000/api/creatives/${creativeId}/timeline?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      setTimelineData(response.data.data);
+    } catch (err) {
+      setTimelineError(getFriendlyErrorMessage(err));
+    } finally {
+      setLoadingTimeline(false);
+    }
+  }, [creativeId, datePreset, customRange, timelineData]);
+
+  const fetchInsights = useCallback(async (force = false) => {
+    if (!creativeId) return;
+    if (!force && insightsData) return;
+    setLoadingInsights(true);
+    setInsightsError(null);
+    try {
+      let url = `http://localhost:5000/api/creatives/${creativeId}/insights?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      setInsightsData(response.data.data);
+    } catch (err) {
+      setInsightsError(getFriendlyErrorMessage(err));
+    } finally {
+      setLoadingInsights(false);
+    }
+  }, [creativeId, datePreset, customRange, insightsData]);
+
   // Progressive fetching based on activeTab
   useEffect(() => {
     if (!isOpen || !creativeId) return;
 
-    if (activeTab === 'info' && !basicData) {
-      const fetchBasic = async () => {
-        setLoadingBasic(true);
-        setBasicError(null);
-        try {
-          const response = await axios.get(`http://localhost:5000/api/creatives/${creativeId}`);
-          setBasicData(response.data.data);
-        } catch (err) {
-          setBasicError(err.response?.data?.message || 'Creative preview is currently unavailable. Please reconnect your Meta account.');
-        } finally {
-          setLoadingBasic(false);
-        }
-      };
+    if (activeTab === 'info') {
       fetchBasic();
-    }
-
-    if (activeTab === 'performance' && !perfData) {
-      const fetchPerf = async () => {
-        setLoadingPerf(true);
-        setPerfError(null);
-        try {
-          let url = `http://localhost:5000/api/creatives/${creativeId}/performance?datePreset=${datePreset}`;
-          if (datePreset === 'custom' && customRange?.since && customRange?.until) {
-            url += `&since=${customRange.since}&until=${customRange.until}`;
-          }
-          const response = await axios.get(url);
-          setPerfData(response.data.data);
-        } catch (err) {
-          setPerfError('Failed to load performance metrics.');
-        } finally {
-          setLoadingPerf(false);
-        }
-      };
+    } else if (activeTab === 'performance') {
       fetchPerf();
-    }
-
-    if (activeTab === 'timeline' && !timelineData) {
-      const fetchTimeline = async () => {
-        setLoadingTimeline(true);
-        setTimelineError(null);
-        try {
-          let url = `http://localhost:5000/api/creatives/${creativeId}/timeline?datePreset=${datePreset}`;
-          if (datePreset === 'custom' && customRange?.since && customRange?.until) {
-            url += `&since=${customRange.since}&until=${customRange.until}`;
-          }
-          const response = await axios.get(url);
-          setTimelineData(response.data.data);
-        } catch (err) {
-          setTimelineError('Failed to load daily history.');
-        } finally {
-          setLoadingTimeline(false);
-        }
-      };
+    } else if (activeTab === 'timeline') {
       fetchTimeline();
-    }
-
-    if (activeTab === 'insights' && !insightsData) {
-      const fetchInsights = async () => {
-        setLoadingInsights(true);
-        setInsightsError(null);
-        try {
-          let url = `http://localhost:5000/api/creatives/${creativeId}/insights?datePreset=${datePreset}`;
-          if (datePreset === 'custom' && customRange?.since && customRange?.until) {
-            url += `&since=${customRange.since}&until=${customRange.until}`;
-          }
-          const response = await axios.get(url);
-          setInsightsData(response.data.data);
-        } catch (err) {
-          setInsightsError('Failed to generate AI insights.');
-        } finally {
-          setLoadingInsights(false);
-        }
-      };
+    } else if (activeTab === 'insights') {
       fetchInsights();
     }
-  }, [isOpen, creativeId, activeTab, datePreset, customRange]);
+  }, [isOpen, creativeId, activeTab, fetchBasic, fetchPerf, fetchTimeline, fetchInsights]);
 
   if (!isOpen) return null;
 
@@ -245,10 +254,11 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                       <Shimmer style={{ height: '60px', width: '100%' }} />
                     </div>
                   ) : basicError ? (
-                    <div className="flex-center" style={{ gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      <AlertTriangle size={18} color="var(--warning)" />
-                      <span>{basicError}</span>
-                    </div>
+                    <SectionError
+                      message={basicError}
+                      onRetry={() => fetchBasic(true)}
+                      isRetrying={loadingBasic}
+                    />
                   ) : basicData ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       <div>
@@ -293,7 +303,11 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                       <Shimmer style={{ height: '60px' }} />
                     </div>
                   ) : perfError ? (
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{perfError}</span>
+                    <SectionError
+                      message={perfError}
+                      onRetry={() => fetchPerf(true)}
+                      isRetrying={loadingPerf}
+                    />
                   ) : perfData ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem' }}>
                       {[
@@ -322,7 +336,11 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                   {loadingTimeline ? (
                     <Shimmer style={{ height: '100%', width: '100%' }} />
                   ) : timelineError ? (
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{timelineError}</span>
+                    <SectionError
+                      message={timelineError}
+                      onRetry={() => fetchTimeline(true)}
+                      isRetrying={loadingTimeline}
+                    />
                   ) : timelineData && timelineData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={timelineData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
@@ -352,7 +370,11 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                       <Shimmer style={{ height: '40px' }} />
                     </div>
                   ) : insightsError ? (
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{insightsError}</span>
+                    <SectionError
+                      message={insightsError}
+                      onRetry={() => fetchInsights(true)}
+                      isRetrying={loadingInsights}
+                    />
                   ) : insightsData && insightsData.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {insightsData.map((item, idx) => {

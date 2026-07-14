@@ -5,6 +5,8 @@ import { useDashboard } from '../context/DashboardContext';
 import { KpiSkeleton } from '../components/LoadingSkeleton';
 import { Users, AlertCircle, ArrowRight, ShieldCheck, MapPin, Calendar, Award } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const AudienceReports = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -61,7 +63,7 @@ const AudienceReports = () => {
         highestSpendPlacement
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to compile audience summaries.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -89,20 +91,11 @@ const AudienceReports = () => {
       </div>
 
       {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
+        <SectionError
+          message={error}
+          onRetry={fetchDemographics}
+          isRetrying={loading}
+        />
       )}
 
       {loading ? (
@@ -187,10 +180,7 @@ const AudienceReports = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr',
-            gap: '2.5rem',
-            '@media (min-width: 768px)': {
-              gridTemplateColumns: '1fr 1fr'
-            }
+            gap: '2.5rem'
           }} id="demographic-nav-grid">
             
             {/* Age Card */}

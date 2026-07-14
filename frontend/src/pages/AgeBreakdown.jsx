@@ -14,6 +14,8 @@ import {
 } from 'recharts';
 import { AlertCircle, Calendar } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const AgeBreakdown = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -33,7 +35,7 @@ const AgeBreakdown = () => {
       const response = await axios.get(url);
       setAgeData(response.data.data.age || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch age demographics.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -61,20 +63,11 @@ const AgeBreakdown = () => {
       </div>
 
       {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
+        <SectionError
+          message={error}
+          onRetry={fetchBreakdowns}
+          isRetrying={loading}
+        />
       )}
 
       {loading ? (

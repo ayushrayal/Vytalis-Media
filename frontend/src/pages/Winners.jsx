@@ -7,6 +7,8 @@ import { formatCurrency } from '../utils/formatter';
 import CreativeImage from '../components/CreativeImage';
 import FilterDrawer from '../components/FilterDrawer';
 import CreativeDetailsModal from '../components/CreativeDetailsModal';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const Winners = () => {
   const { datePreset, customRange, refreshTrigger, globalSearch } = useDashboard();
@@ -64,7 +66,7 @@ const Winners = () => {
       setCreatives(filtered);
       setPagination(response.data.pagination || { page: 1, limit: 12, total: 0, totalPages: 1 });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load winning creatives.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -185,10 +187,11 @@ const Winners = () => {
       </div>
 
       {error && (
-        <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <AlertCircle size={20} />
-          <span>{error}</span>
-        </div>
+        <SectionError
+          message={error}
+          onRetry={fetchWinners}
+          isRetrying={loading}
+        />
       )}
 
       {loading ? (

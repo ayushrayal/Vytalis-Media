@@ -23,6 +23,7 @@ import AIInsights from './pages/AIInsights';
 import CreativeDetails from './pages/CreativeDetails';
 import Profile from './pages/Profile';
 import Signup from './pages/Signup';
+import DebugPanel from './components/DebugPanel';
 
 // Wrapper component to inject DashboardContext state into DashboardLayout
 const LayoutWrapper = ({ children }) => {
@@ -171,6 +172,7 @@ const App = () => {
                 </ProtectedRoute>
               } />
             </Routes>
+            {import.meta.env.DEV && <DebugPanel />}
           </Router>
         </DashboardProvider>
       </AuthProvider>

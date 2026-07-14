@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useDashboard } from '../context/DashboardContext';
 import { KpiSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
+import SectionError from '../components/SectionError';
+import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -45,6 +47,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [loadingTrends, setLoadingTrends] = useState(true);
   const [error, setError] = useState(null);
+  const [trendsError, setTrendsError] = useState(null);
   const [data, setData] = useState(null);
   const [trends, setTrends] = useState([]);
   const [selectedMetric, setSelectedMetric] = useState(null);
@@ -63,7 +66,7 @@ const Dashboard = () => {
       setData(response.data.data);
     } catch (err) {
       console.error('Failed to fetch overview metrics:', err);
-      setError(err.response?.data?.message || 'Failed to load dashboard overview KPIs.');
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -72,6 +75,7 @@ const Dashboard = () => {
   // Fetch trend timelines
   const fetchTrends = useCallback(async () => {
     setLoadingTrends(true);
+    setTrendsError(null);
     try {
       let url = `http://localhost:5000/api/dashboard/trends?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
@@ -82,6 +86,7 @@ const Dashboard = () => {
       setTrends(response.data.data || []);
     } catch (err) {
       console.error('Failed to fetch trend timelines:', err);
+      setTrendsError(getFriendlyErrorMessage(err));
     } finally {
       setLoadingTrends(false);
     }
@@ -273,27 +278,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Main Error Banner */}
-      {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          marginBottom: '2rem'
-        }}>
-          <AlertCircle size={20} />
-          <div>
-            <h4 style={{ fontWeight: 600, fontSize: '0.95rem' }}>Overview Loading Failed</h4>
-            <p style={{ fontSize: '0.85rem', marginTop: '0.1rem' }}>{error}</p>
-          </div>
-        </div>
-      )}
-
       {/* KPI Grid Section */}
       {loading ? (
         <div style={{
@@ -303,6 +287,14 @@ const Dashboard = () => {
           marginBottom: '2rem'
         }}>
           {Array.from({ length: 11 }).map((_, idx) => <KpiSkeleton key={idx} />)}
+        </div>
+      ) : error ? (
+        <div style={{ marginBottom: '2rem' }}>
+          <SectionError
+            message={error}
+            onRetry={fetchOverview}
+            isRetrying={loading}
+          />
         </div>
       ) : data ? (
         <div style={{
@@ -336,14 +328,17 @@ const Dashboard = () => {
         display: 'grid',
         gridTemplateColumns: '1fr',
         gap: '2rem',
-        marginBottom: '2rem',
-        '@media (min-width: 1024px)': {
-          gridTemplateColumns: '2fr 1fr'
-        }
+        marginBottom: '2rem'
       }} id="dashboard-charts-grid">
         {/* Composed Chart: Spend & ROAS Trend */}
         {loadingTrends ? (
           <ChartSkeleton />
+        ) : trendsError ? (
+          <SectionError
+            message={trendsError}
+            onRetry={fetchTrends}
+            isRetrying={loadingTrends}
+          />
         ) : trends.length > 0 ? (
           <div className="card fade-in" style={{ height: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <h3 style={{ fontSize: '1.1rem' }}>Spend & Return on Ad Spend (ROAS) Trend</h3>
@@ -390,6 +385,12 @@ const Dashboard = () => {
         {/* Bar Chart: Daily Purchases Volume */}
         {loadingTrends ? (
           <ChartSkeleton />
+        ) : trendsError ? (
+          <SectionError
+            message={trendsError}
+            onRetry={fetchTrends}
+            isRetrying={loadingTrends}
+          />
         ) : trends.length > 0 ? (
           <div className="card fade-in" style={{ height: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <h3 style={{ fontSize: '1.1rem' }}>Daily Purchases Trend</h3>
