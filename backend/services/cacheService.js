@@ -1,4 +1,5 @@
 import cacheConfig from '../config/cacheConfig.js';
+import { PerfTracker } from '../utils/perfTracker.js';
 
 /**
  * CacheService - Simple in-memory cache with TTL (Time To Live) support
@@ -12,6 +13,19 @@ class CacheService {
     this.DEFAULT_TTL = 300;
     this.hits = 0;
     this.misses = 0;
+  }
+
+  /**
+   * Expose cache performance statistics
+   */
+  getStats() {
+    const total = this.hits + this.misses;
+    const ratio = total > 0 ? this.hits / total : 0;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      ratio
+    };
   }
 
   /**
@@ -29,23 +43,51 @@ class CacheService {
    * Retrieve an item from the cache
    */
   get(key) {
-    if (!this.cache.has(key)) {
-      this.misses++;
-      return null;
+    const start = Date.now();
+    if (process.env.NODE_ENV !== 'production') {
+      console.time("Cache");
     }
 
-    const { value, expiresAt } = this.cache.get(key);
+    try {
+      if (!this.cache.has(key)) {
+        this.misses++;
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Cache Service] CACHE MISS - Key: ${key}`);
+          PerfTracker.increment('cacheMisses');
+        }
+        return null;
+      }
 
-    // If expired, delete and return null
-    if (Date.now() > expiresAt) {
-      this.cache.delete(key);
-      this.misses++;
-      return null;
+      const { value, expiresAt } = this.cache.get(key);
+
+      // If expired, delete and return null
+      if (Date.now() > expiresAt) {
+        this.cache.delete(key);
+        this.misses++;
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Cache Service] CACHE MISS - Key: ${key} (Expired)`);
+          PerfTracker.increment('cacheMisses');
+        }
+        return null;
+      }
+
+      this.hits++;
+      if (process.env.NODE_ENV !== 'production') {
+        const ttlRemaining = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+        console.log(`[Cache Service] CACHE HIT - Key: ${key} - TTL Remaining: ${ttlRemaining}s`);
+        PerfTracker.increment('cacheHits');
+        PerfTracker.setCacheStatus('HIT');
+      }
+      return value;
+    } finally {
+      if (process.env.NODE_ENV !== 'production') {
+        console.timeEnd("Cache");
+        const duration = Date.now() - start;
+        PerfTracker.track('cacheLookup', duration);
+      }
     }
-
-    this.hits++;
-    return value;
   }
+
 
   /**
    * Store an item in the cache

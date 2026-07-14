@@ -3,6 +3,8 @@ import metaApi from '../config/metaApi.js';
 import { getBaseField, fieldMap } from '../config/metaFields.js';
 import Logger from '../utils/logger.js';
 import DiagnosticsService from './diagnosticsService.js';
+import { PerfTracker } from '../utils/perfTracker.js';
+
 
 // Cooldown state per Ad Account ID
 const cooldowns = new Map();
@@ -203,9 +205,20 @@ class MetaService {
 
       while (retryCount < backoffs.length) {
         try {
+          if (process.env.NODE_ENV !== 'production') {
+            console.time("Meta API");
+          }
           const response = await fetch(url, requestOptions);
           const data = await response.json();
           const responseTime = Date.now() - requestStart;
+
+          if (process.env.NODE_ENV !== 'production') {
+            console.timeEnd("Meta API");
+            console.log(`[Meta API Call] Endpoint: ${endpoint || '/'} - Duration: ${responseTime}ms - Version: ${metaApi.version} - Status: ${response.status}`);
+            PerfTracker.increment('metaRequests');
+            PerfTracker.track('metaApi', responseTime);
+          }
+
 
           if (!response.ok) {
             const error = new Error(data.error?.message || 'Graph API request failed');

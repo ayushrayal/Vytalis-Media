@@ -10,9 +10,14 @@ router.use(authMiddleware);
 router.get('/', CreativeController.getCreatives);
 router.get('/videos', CreativeController.getVideos);
 router.get('/statics', CreativeController.getStatics);
+router.get('/winners', CreativeController.getWinners);
+router.get('/poor-performers', CreativeController.getPoorPerformers);
+
 router.get('/:id', CreativeController.getCreativeById);
 router.get('/:id/performance', CreativeController.getCreativePerformance);
 router.get('/:id/timeline', CreativeController.getCreativeTimeline);
+router.get('/:id/recommendations', CreativeController.getCreativeRecommendations);
 router.get('/:id/insights', CreativeController.getCreativeInsights);
+
 
 export default router;

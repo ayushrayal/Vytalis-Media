@@ -83,11 +83,12 @@ class FilterService {
     // 2. Rating/Performance Badge Filter
     const targetRating = rating || badge;
     if (targetRating) {
-      const ratingLower = targetRating.toLowerCase();
+      const ratingList = targetRating.toLowerCase().split(',').map(s => s.trim());
       filtered = filtered.filter(c => 
-        (c.performanceBadge && c.performanceBadge.toLowerCase() === ratingLower)
+        (c.performanceBadge && ratingList.includes(c.performanceBadge.toLowerCase()))
       );
     }
+
 
     // 3. Category Filter
     if (category) {

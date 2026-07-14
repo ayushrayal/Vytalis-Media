@@ -79,7 +79,7 @@ class InsightService {
   /**
    * Fetch ad-level insights for a given time range, filtered to OUTCOME_SALES campaigns
    */
-  static async getAdInsights(user, timeRange) {
+  static async getAdInsights(user, timeRange, adIds = null) {
     const accountId = user.metaAccountId;
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
     
@@ -93,10 +93,16 @@ class InsightService {
 
     // 2. Fetch ad-level insights with campaign filtering pushed to Meta API
     const endpoint = `${formattedAccountId}/insights`;
+    
+    const filtering = [{ field: 'campaign.id', operator: 'IN', value: salesCampaignIds }];
+    if (adIds && adIds.length > 0) {
+      filtering.push({ field: 'ad.id', operator: 'IN', value: adIds });
+    }
+
     const params = {
       level: 'ad',
       fields: 'ad_id,ad_name,campaign_id,spend,impressions,clicks,inline_link_clicks,reach,frequency,actions,action_values,video_thruplay_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions,video_play_actions,video_avg_time_watched_actions',
-      filtering: [{ field: 'campaign.id', operator: 'IN', value: salesCampaignIds }],
+      filtering,
       time_range: timeRange,
       limit: 1000
     };
@@ -104,6 +110,7 @@ class InsightService {
     const response = await MetaService.get(endpoint, user, params);
     return response.data || [];
   }
+
 
   /**
    * Fetch de-duplicated account-level insights for OUTCOME_SALES campaigns

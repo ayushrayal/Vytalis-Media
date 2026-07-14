@@ -4,8 +4,10 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import ErrorService from './services/errorService.js';
 import requestTracer from './middlewares/requestTracer.js';
+import perfMonitoring from './middlewares/perfMonitoring.js';
 
 // Import routers
+
 import authRouter from './routes/auth.js';
 import dashboardRouter from './routes/dashboard.js';
 import campaignRouter from './routes/campaigns.js';
@@ -28,6 +30,10 @@ app.use(morgan('dev'));
 
 // Request Tracer Middleware
 app.use(requestTracer);
+
+// Performance Monitoring Middleware
+app.use(perfMonitoring);
+
 
 // Response Interceptor to inject requestId into JSON response meta
 app.use((req, res, next) => {

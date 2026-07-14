@@ -4,9 +4,6 @@ import ClassificationService from '../services/classificationService.js';
 import CacheService from '../services/cacheService.js';
 import DateHelper from '../utils/dateHelper.js';
 import FilterService from '../services/filterService.js';
-import RecommendationService from '../services/recommendationService.js';
-import MetaService from '../services/metaService.js';
-import MediaService from '../services/mediaService.js';
 
 class CreativeController {
   /**
@@ -51,6 +48,7 @@ class CreativeController {
   /**
    * GET /api/creatives
    * Fetch all creatives with aggregated insights, classifications, and performance badges
+   * Uses lazy enrichment (forceEnrich = false)
    */
   static async getCreatives(req, res, next) {
     try {
@@ -75,12 +73,12 @@ class CreativeController {
         isCached = true;
       } else {
         const [creatives, adInsights] = await Promise.all([
-          CreativeService.getSalesCreatives(user),
+          CreativeService.getSalesCreatives(user, false), // forceEnrich = false (lazy load)
           InsightService.getAdInsights(user, current)
         ]);
 
         processed = CreativeController.processCreativesWithInsights(creatives, adInsights);
-        CacheService.set(cacheKey, processed, 300);
+        CacheService.set(cacheKey, processed, 300); // 5 min list cache (Refinement 3)
       }
 
       // Apply Search
@@ -142,6 +140,22 @@ class CreativeController {
   }
 
   /**
+   * GET /api/creatives/winners
+   */
+  static async getWinners(req, res, next) {
+    req.query.badge = 'Excellent,Great,Good';
+    return CreativeController.getCreatives(req, res, next);
+  }
+
+  /**
+   * GET /api/creatives/poor-performers
+   */
+  static async getPoorPerformers(req, res, next) {
+    req.query.badge = 'Low';
+    return CreativeController.getCreatives(req, res, next);
+  }
+
+  /**
    * GET /api/creatives/:id
    * Progressive load stage 1: Fetch basic information
    */
@@ -162,10 +176,8 @@ class CreativeController {
         });
       }
 
-      const creatives = await CreativeService.getSalesCreatives(user);
-      const creative = creatives.find(c => c.id === creativeId);
-
-      if (!creative) {
+      const result = await CreativeService.getCreativeById(user, creativeId);
+      if (!result) {
         return res.status(404).json({
           success: false,
           errorType: 'NOT_FOUND',
@@ -173,11 +185,7 @@ class CreativeController {
         });
       }
 
-      // Run enrich to populate headline, cta, landingPage, productName, createdDate
-      const enriched = await MediaService.enrichCreativeAssets([creative], user);
-      const result = enriched[0];
-
-      CacheService.set(cacheKey, result, 600); // basic info changes rarely, cache longer
+      CacheService.set(cacheKey, result, 21600); // 6 hours metadata cache (Refinement 3)
 
       res.status(200).json({
         success: true,
@@ -189,7 +197,7 @@ class CreativeController {
       });
     } catch (error) {
       error.controller = 'CreativeController';
-      error.service = 'CreativeService/MediaService';
+      error.service = 'CreativeService';
       next(error);
     }
   }
@@ -222,21 +230,15 @@ class CreativeController {
         });
       }
 
-      const creatives = await CreativeService.getSalesCreatives(user);
-      const creative = creatives.find(c => c.id === creativeId);
-
-      if (!creative) {
+      const result = await CreativeService.getCreativePerformance(user, creativeId, current);
+      if (!result) {
         return res.status(404).json({
           success: false,
           message: 'Ad creative not found.'
         });
       }
 
-      const adInsights = await InsightService.getAdInsights(user, current);
-      const processed = CreativeController.processCreativesWithInsights([creative], adInsights);
-      const result = processed[0].metrics;
-
-      CacheService.set(cacheKey, result, 300);
+      CacheService.set(cacheKey, result, 300); // 5 mins cache for metrics/performance
 
       res.status(200).json({
         success: true,
@@ -249,7 +251,7 @@ class CreativeController {
       });
     } catch (error) {
       error.controller = 'CreativeController';
-      error.service = 'CreativeService/InsightService';
+      error.service = 'CreativeService';
       next(error);
     }
   }
@@ -282,76 +284,19 @@ class CreativeController {
         });
       }
 
-      const creatives = await CreativeService.getSalesCreatives(user);
-      const creative = creatives.find(c => c.id === creativeId);
-
-      if (!creative) {
+      const result = await CreativeService.getCreativeTimeline(user, creativeId, current);
+      if (!result) {
         return res.status(404).json({
           success: false,
           message: 'Ad creative not found.'
         });
       }
 
-      const adIds = creative.ads?.map(ad => ad.adId) || [];
-      if (adIds.length === 0) {
-        return res.status(200).json({
-          success: true,
-          data: [],
-          meta: { generatedAt: new Date().toISOString(), cache: false, dateRange: current }
-        });
-      }
-
-      const accountId = user.metaAccountId;
-      const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-      
-      const response = await MetaService.get(`${formattedAccountId}/insights`, user, {
-        level: 'ad',
-        time_increment: 1,
-        fields: 'ad_id,spend,impressions,clicks,actions,action_values,date_start',
-        filtering: [{ field: 'ad.id', operator: 'IN', value: adIds }],
-        time_range: current,
-        limit: 1000
-      });
-
-      const dailyMap = new Map();
-      (response.data || []).forEach(item => {
-        const date = item.date_start;
-        const spend = parseFloat(item.spend || 0);
-        const clicks = parseInt(item.clicks || 0, 10);
-        const impressions = parseInt(item.impressions || 0, 10);
-        const purchases = InsightService.getPurchaseActions(item.actions);
-        const value = InsightService.getPurchaseActions(item.action_values);
-
-        if (!dailyMap.has(date)) {
-          dailyMap.set(date, { date, spend: 0, clicks: 0, impressions: 0, purchases: 0, revenue: 0 });
-        }
-
-        const entry = dailyMap.get(date);
-        entry.spend += spend;
-        entry.clicks += clicks;
-        entry.impressions += impressions;
-        entry.purchases += purchases;
-        entry.revenue += value;
-      });
-
-      const timeline = Array.from(dailyMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date));
-      const enrichedTimeline = timeline.map(day => {
-        const ctr = day.impressions > 0 ? (day.clicks / day.impressions) * 100 : 0;
-        const roas = day.spend > 0 ? day.revenue / day.spend : 0;
-        const cpa = day.purchases > 0 ? day.spend / day.purchases : 0;
-        return {
-          ...day,
-          ctr: parseFloat(ctr.toFixed(2)),
-          roas: parseFloat(roas.toFixed(2)),
-          cpa: parseFloat(cpa.toFixed(2))
-        };
-      });
-
-      CacheService.set(cacheKey, enrichedTimeline, 300);
+      CacheService.set(cacheKey, result, 300);
 
       res.status(200).json({
         success: true,
-        data: enrichedTimeline,
+        data: result,
         meta: {
           generatedAt: new Date().toISOString(),
           cache: false,
@@ -360,16 +305,16 @@ class CreativeController {
       });
     } catch (error) {
       error.controller = 'CreativeController';
-      error.service = 'CreativeService/MetaService';
+      error.service = 'CreativeService';
       next(error);
     }
   }
 
   /**
-   * GET /api/creatives/:id/insights
-   * Progressive load stage 4: AI Recommendations
+   * GET /api/creatives/:id/recommendations
+   * Canonical endpoint for AI recommendations
    */
-  static async getCreativeInsights(req, res, next) {
+  static async getCreativeRecommendations(req, res, next) {
     try {
       const { id: creativeId } = req.params;
       const { preset = 'last_7_days', since, until } = req.query;
@@ -393,30 +338,19 @@ class CreativeController {
         });
       }
 
-      const creatives = await CreativeService.getSalesCreatives(user);
-      const creative = creatives.find(c => c.id === creativeId);
-
-      if (!creative) {
+      const result = await CreativeService.getCreativeRecommendations(user, creativeId, current);
+      if (!result) {
         return res.status(404).json({
           success: false,
           message: 'Ad creative not found.'
         });
       }
 
-      const adInsights = await InsightService.getAdInsights(user, current);
-      const processed = CreativeController.processCreativesWithInsights([creative], adInsights);
-      
-      const enrichedCreative = processed[0];
-      const insights = RecommendationService.generateCreativeRecommendations(
-        enrichedCreative.metrics,
-        enrichedCreative
-      );
-
-      CacheService.set(cacheKey, insights, 300);
+      CacheService.set(cacheKey, result, 300);
 
       res.status(200).json({
         success: true,
-        data: insights,
+        data: result,
         meta: {
           generatedAt: new Date().toISOString(),
           cache: false,
@@ -425,9 +359,17 @@ class CreativeController {
       });
     } catch (error) {
       error.controller = 'CreativeController';
-      error.service = 'CreativeService/InsightService/RecommendationService';
+      error.service = 'CreativeService';
       next(error);
     }
+  }
+
+  /**
+   * GET /api/creatives/:id/insights
+   * Progressive load stage 4: AI Recommendations (Backwards-compatible delegate)
+   */
+  static async getCreativeInsights(req, res, next) {
+    return CreativeController.getCreativeRecommendations(req, res, next);
   }
 }
 
