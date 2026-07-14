@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
@@ -14,34 +13,68 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { AlertCircle, Monitor } from 'lucide-react';
+import { AlertCircle, Monitor, SlidersHorizontal } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
 import CreativeImage from '../components/CreativeImage';
+import FilterDrawer from '../components/FilterDrawer';
+import CreativeDetailsModal from '../components/CreativeDetailsModal';
 
 const StaticAnalysis = () => {
-  const { datePreset, customRange, refreshTrigger } = useDashboard();
-  const navigate = useNavigate();
+  const { datePreset, customRange, refreshTrigger, globalSearch } = useDashboard();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statics, setStatics] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, totalPages: 1 });
+
+  // Filter Drawer State
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    badge: '',
+    category: '',
+    platform: '',
+    placement: '',
+    hasPurchases: '',
+    spendRange: '',
+    roasRange: ''
+  });
+
+  // Modal State
+  const [selectedCreativeId, setSelectedCreativeId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchStaticCreatives = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      let url = `http://localhost:5000/api/creatives/statics?preset=${datePreset}`;
+      let params = {
+        preset: datePreset,
+        page: currentPage,
+        limit: 12,
+        search: globalSearch || ''
+      };
+
       if (datePreset === 'custom' && customRange.since && customRange.until) {
-        url += `&since=${customRange.since}&until=${customRange.until}`;
+        params.since = customRange.since;
+        params.until = customRange.until;
       }
 
-      const response = await axios.get(url);
+      // Add active filters
+      Object.keys(activeFilters).forEach(key => {
+        if (activeFilters[key]) {
+          params[key] = activeFilters[key];
+        }
+      });
+
+      const response = await axios.get('http://localhost:5000/api/creatives/statics', { params });
       setStatics(response.data.data || []);
+      setPagination(response.data.pagination || { page: 1, limit: 12, total: 0, totalPages: 1 });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load static creatives.');
     } finally {
       setLoading(false);
     }
-  }, [datePreset, customRange, refreshTrigger]);
+  }, [datePreset, customRange, refreshTrigger, globalSearch, activeFilters, currentPage]);
 
   useEffect(() => {
     if (datePreset === 'custom' && (!customRange.since || !customRange.until)) {
@@ -50,39 +83,122 @@ const StaticAnalysis = () => {
     fetchStaticCreatives();
   }, [fetchStaticCreatives, datePreset, customRange]);
 
-  // formatCurrency imported from formatter.js
+  const handleFilterChange = (id, value) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [id]: value
+    }));
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setActiveFilters({
+      badge: '',
+      category: '',
+      platform: '',
+      placement: '',
+      hasPurchases: '',
+      spendRange: '',
+      roasRange: ''
+    });
+    setCurrentPage(1);
+  };
+
+  const filtersConfig = [
+    {
+      id: 'badge',
+      label: 'Performance Level',
+      type: 'select',
+      options: ['Excellent', 'Great', 'Good', 'Average', 'Poor', 'Critical']
+    },
+    {
+      id: 'platform',
+      label: 'Platform',
+      type: 'select',
+      options: ['facebook', 'instagram', 'messenger', 'audience_network']
+    },
+    {
+      id: 'placement',
+      label: 'Placement Position',
+      type: 'select',
+      options: ['Facebook Feed', 'Facebook Stories', 'Facebook Reels', 'Instagram Feed', 'Instagram Stories', 'Instagram Reels']
+    },
+    {
+      id: 'hasPurchases',
+      label: 'Has Purchases',
+      type: 'select',
+      options: ['Yes', 'No']
+    },
+    {
+      id: 'spendRange',
+      label: 'Spend Bracket',
+      type: 'select',
+      options: ['₹0–₹500', '₹500–₹2,000', '₹2,000–₹5,000', '₹5,000+']
+    },
+    {
+      id: 'roasRange',
+      label: 'ROAS Bracket',
+      type: 'select',
+      options: ['0.0-1.0x', '1.0-2.0x', '2.0-4.0x', '4.0x+']
+    }
+  ];
 
   // Prepare chart dataset (creative name capped + rates)
   const chartData = statics.map(s => ({
-    name: s.name.slice(0, 15) + '...',
+    name: s.name.length > 15 ? s.name.slice(0, 15) + '...' : s.name,
     'CTR %': parseFloat((s.metrics.ctr || 0).toFixed(2)),
     'ROAS': parseFloat((s.metrics.roas || 0).toFixed(2))
-  })).slice(0, 10); // show top 10
+  })).slice(0, 10);
 
   return (
     <div>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Monitor size={28} color="var(--primary)" />
-          <span>Static Creative Performance Analytics</span>
-        </h1>
-        <p style={{ color: 'var(--text-secondary)' }}>
-          Detailed click-through-rates, CPM, and conversion values across all static images and carousels
-        </p>
+      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Monitor size={28} color="var(--primary)" />
+            <span>Static Creative Performance Analytics</span>
+          </h1>
+          <p style={{ color: 'var(--text-secondary)' }}>
+            Detailed click-through-rates, CPM, and conversion values across all static images and carousels
+          </p>
+        </div>
+
+        <button
+          onClick={() => setIsFilterOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.6rem 1rem',
+            background: 'var(--primary)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontSize: '0.85rem'
+          }}
+        >
+          <SlidersHorizontal size={16} />
+          Filters
+          {Object.values(activeFilters).filter(Boolean).length > 0 && (
+            <span style={{
+              background: '#fff',
+              color: 'var(--primary)',
+              padding: '0.1rem 0.4rem',
+              borderRadius: '50%',
+              fontSize: '0.7rem',
+              marginLeft: '0.2rem',
+              fontWeight: 700
+            }}>
+              {Object.values(activeFilters).filter(Boolean).length}
+            </span>
+          )}
+        </button>
       </div>
 
       {error && (
-        <div style={{
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
-          color: 'var(--danger)',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
-        }}>
+        <div style={{ background: 'var(--danger-light)', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <AlertCircle size={20} />
           <span>{error}</span>
         </div>
@@ -141,7 +257,10 @@ const StaticAnalysis = () => {
                 {statics.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() => navigate(`/creatives/${row.id}`)}
+                    onClick={() => {
+                      setSelectedCreativeId(row.id);
+                      setIsModalOpen(true);
+                    }}
                     style={{ borderBottom: '1px solid var(--border-color)', cursor: 'pointer', transition: 'background var(--transition-fast)' }}
                     className="table-row-hover"
                   >
@@ -179,9 +298,28 @@ const StaticAnalysis = () => {
         </div>
       ) : (
         <div className="card flex-center" style={{ height: '300px', flexDirection: 'column', gap: '0.5rem' }}>
-          <p style={{ color: 'var(--text-secondary)' }}>No static creatives running in this period.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>No static creatives matched the active filters.</p>
         </div>
       )}
+
+      {/* Filter Drawer */}
+      <FilterDrawer
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        filtersConfig={filtersConfig}
+        activeFilters={activeFilters}
+        onFilterChange={handleFilterChange}
+        onReset={handleResetFilters}
+      />
+
+      {/* Details Modal */}
+      <CreativeDetailsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        creativeId={selectedCreativeId}
+        datePreset={datePreset}
+        customRange={customRange}
+      />
 
       <style>{`
         .table-row-hover:hover {

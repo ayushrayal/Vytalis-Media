@@ -1,9 +1,13 @@
+import cacheConfig from '../config/cacheConfig.js';
+
 /**
  * CacheService - Simple in-memory cache with TTL (Time To Live) support
+ * and Promise-level request deduplication.
  */
 class CacheService {
   constructor() {
     this.cache = new Map();
+    this.pendingPromises = new Map();
     // Default TTL of 5 minutes (300 seconds)
     this.DEFAULT_TTL = 300;
   }
@@ -61,6 +65,52 @@ class CacheService {
    */
   flush() {
     this.cache.clear();
+    this.pendingPromises.clear();
+  }
+
+  /**
+   * Alias for flush
+   */
+  clear() {
+    this.flush();
+  }
+
+  /**
+   * Deduplicate concurrent fetching. Returns cached value, active pending promise, or creates one.
+   */
+  async getOrFetch(key, fetchFn, ttlTypeOrSeconds) {
+    // 1. Check cache
+    const cachedValue = this.get(key);
+    if (cachedValue !== null) {
+      return cachedValue;
+    }
+
+    // 2. Check in-flight promises
+    if (this.pendingPromises.has(key)) {
+      return this.pendingPromises.get(key);
+    }
+
+    // 3. Resolve TTL from cacheConfig.js
+    let ttl = this.DEFAULT_TTL;
+    if (typeof ttlTypeOrSeconds === 'number') {
+      ttl = ttlTypeOrSeconds;
+    } else if (ttlTypeOrSeconds && cacheConfig[ttlTypeOrSeconds] !== undefined) {
+      ttl = cacheConfig[ttlTypeOrSeconds];
+    }
+
+    // 4. Create and trace the Promise
+    const promise = (async () => {
+      try {
+        const result = await fetchFn();
+        this.set(key, result, ttl);
+        return result;
+      } finally {
+        this.pendingPromises.delete(key);
+      }
+    })();
+
+    this.pendingPromises.set(key, promise);
+    return promise;
   }
 
   /**

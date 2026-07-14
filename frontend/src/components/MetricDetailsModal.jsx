@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { X, TrendingUp, TrendingDown, Info, Calculator } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Info, Calculator, Calendar } from 'lucide-react';
 import { Shimmer } from './LoadingSkeleton';
 import MetricTrendChart from './MetricTrendChart';
 import { formatCurrency } from '../utils/formatter';
+
+// Session-level global trend cache
+const trendCache = {};
 
 const MetricDetailsModal = ({
   isOpen,
@@ -16,33 +19,44 @@ const MetricDetailsModal = ({
   direction,
   isCurrency = false,
   isPercent = false,
-  startDateStr // Pass since date of the current range to find the selected month
+  startDateStr
 }) => {
   const [loading, setLoading] = useState(true);
   const [trendData, setTrendData] = useState([]);
   const [error, setError] = useState(null);
+  const [granularity, setGranularity] = useState('daily'); // 'daily' or 'monthly'
 
-  // Compute date range: 1st day of the selected month until today
+  // Fetch or retrieve trend data from cache
   useEffect(() => {
     if (!isOpen) return;
+
+    let firstDay = '';
+    try {
+      const d = new Date(startDateStr || Date.now());
+      firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    } catch (e) {
+      const d = new Date();
+      firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const cacheKey = `${firstDay}_${todayStr}`;
+
+    if (trendCache[cacheKey]) {
+      setTrendData(trendCache[cacheKey]);
+      setLoading(false);
+      return;
+    }
 
     const fetchTrendData = async () => {
       setLoading(true);
       setError(null);
       try {
-        let firstDay = '';
-        try {
-          const d = new Date(startDateStr || Date.now());
-          firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-        } catch (e) {
-          const d = new Date();
-          firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-        }
-
-        const todayStr = new Date().toISOString().split('T')[0];
         const url = `http://localhost:5000/api/dashboard/trends?preset=custom&since=${firstDay}&until=${todayStr}`;
         const response = await axios.get(url);
-        setTrendData(response.data.data || []);
+        const data = response.data.data || [];
+        trendCache[cacheKey] = data;
+        setTrendData(data);
       } catch (err) {
         setError('Failed to fetch trend timelines for the selected month.');
       } finally {
@@ -51,11 +65,53 @@ const MetricDetailsModal = ({
     };
 
     fetchTrendData();
-  }, [isOpen, metricKey, startDateStr]);
+  }, [isOpen, startDateStr]);
 
   if (!isOpen) return null;
 
-  // Calculate statistics from the trend series
+  // Process data based on granularity selection
+  let chartData = [...trendData];
+  if (granularity === 'monthly') {
+    const monthlyMap = {};
+    trendData.forEach((day) => {
+      const monthKey = (day.date || '').substring(0, 7); // 'YYYY-MM'
+      if (!monthKey) return;
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = {
+          date: monthKey,
+          spend: 0,
+          purchases: 0,
+          revenue: 0,
+          clicks: 0,
+          impressions: 0
+        };
+      }
+      const entry = monthlyMap[monthKey];
+      entry.spend += day.spend || 0;
+      entry.purchases += day.purchases || 0;
+      entry.revenue += day.revenue || 0;
+      entry.clicks += day.clicks || 0;
+      entry.impressions += day.impressions || 0;
+    });
+
+    chartData = Object.values(monthlyMap).map(m => {
+      const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
+      const roas = m.spend > 0 ? m.revenue / m.spend : 0;
+      const cpa = m.purchases > 0 ? m.spend / m.purchases : 0;
+      const cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
+      const cpm = m.impressions > 0 ? (m.spend / m.impressions) * 1000 : 0;
+      return {
+        ...m,
+        ctr,
+        roas,
+        cpa,
+        cpc,
+        cpm
+      };
+    }).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Calculate statistics from the daily trend series
   const values = trendData.map(d => d[metricKey] || 0).sort((a, b) => a - b);
   const total = values.reduce((sum, val) => sum + val, 0);
   const average = values.length > 0 ? total / values.length : 0;
@@ -132,11 +188,11 @@ const MetricDetailsModal = ({
             top: '1.5rem',
             right: '1.5rem',
             cursor: 'pointer',
+            background: 'none',
+            border: 'none',
             color: 'var(--text-secondary)',
             transition: 'color var(--transition-fast)'
           }}
-          onMouseEnter={(e) => e.target.style.color = 'var(--text-primary)'}
-          onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary)'}
         >
           <X size={20} />
         </button>
@@ -200,31 +256,62 @@ const MetricDetailsModal = ({
           </div>
         </div>
 
+        {/* Chart Granularity selector */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '0.5rem', marginBottom: '1rem' }}>
+          <button
+            onClick={() => setGranularity('daily')}
+            style={{
+              padding: '0.35rem 0.85rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+              border: '1px solid var(--border-color)',
+              background: granularity === 'daily' ? 'var(--primary)' : 'var(--bg-primary)',
+              color: granularity === 'daily' ? '#fff' : 'var(--text-secondary)'
+            }}
+          >
+            Daily View
+          </button>
+          <button
+            onClick={() => setGranularity('monthly')}
+            style={{
+              padding: '0.35rem 0.85rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+              border: '1px solid var(--border-color)',
+              background: granularity === 'monthly' ? 'var(--primary)' : 'var(--bg-primary)',
+              color: granularity === 'monthly' ? '#fff' : 'var(--text-secondary)'
+            }}
+          >
+            Monthly View
+          </button>
+        </div>
+
         {/* Trend & Calculations Split Layout */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr',
           gap: '2rem',
           flex: 1,
-          minHeight: 0,
-          '@media (min-width: 768px)': {
-            gridTemplateColumns: '3fr 1.5fr'
-          }
+          minHeight: 0
         }} id="modal-drilldown-split">
-          {/* Daily Trend Chart */}
+          {/* Daily/Monthly Trend Chart */}
           <div style={{ height: '320px', display: 'flex', flexDirection: 'column' }}>
             <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <TrendingUp size={16} color="var(--primary)" />
-              <span>Daily Trend Timeline</span>
+              <span>{granularity === 'daily' ? 'Daily' : 'Monthly'} Trend Timeline</span>
             </h4>
             <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1rem' }}>
               {loading ? (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shimmer /></div>
               ) : error ? (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</div>
-              ) : trendData.length > 0 ? (
+              ) : chartData.length > 0 ? (
                 <MetricTrendChart
-                  data={trendData}
+                  data={chartData}
                   metricKey={metricKey}
                   metricLabel={metricTitle}
                   isCurrency={isCurrency}
@@ -250,7 +337,6 @@ const MetricDetailsModal = ({
               display: 'flex',
               flexDirection: 'column',
               gap: '0.75rem',
-              height: 'calc(100% - 2.2rem)',
               justifyContent: 'space-between'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border-color)', paddingBottom: '0.5rem', fontSize: '0.85rem' }}>

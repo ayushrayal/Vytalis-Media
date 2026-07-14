@@ -3,28 +3,27 @@ import InsightService from '../services/insightService.js';
 import ClassificationService from '../services/classificationService.js';
 import CacheService from '../services/cacheService.js';
 import DateHelper from '../utils/dateHelper.js';
+import FilterService from '../services/filterService.js';
+import RecommendationService from '../services/recommendationService.js';
+import MetaService from '../services/metaService.js';
 
 class CreativeController {
   /**
    * Helper to aggregate insights for a list of creatives
    */
   static processCreativesWithInsights(creatives, adInsights) {
-    // Index ad insights by ad_id for fast lookup
     const insightMap = new Map();
     adInsights.forEach(ins => {
       insightMap.set(ins.ad_id, ins);
     });
 
     return creatives.map(creative => {
-      // Find all insights for ads that use this creative
       const creativeInsights = creative.ads
         .map(ad => insightMap.get(ad.adId))
         .filter(Boolean);
 
-      // Aggregate these insights
       const aggregated = InsightService.aggregateInsights(creativeInsights);
 
-      // Classify the creative
       const isCarousel = creative.object_story_spec?.carousel_spec || creative.ads.some(a => a.adName.toLowerCase().includes('carousel'));
       const category = creative.isVideo
         ? ClassificationService.classifyVideo(creative.name, creative.copyText)
@@ -36,7 +35,6 @@ class CreativeController {
         aggregated.purchases
       );
 
-      // Identify status (ACTIVE if any running ad is ACTIVE)
       const status = creative.ads.some(a => a.adStatus === 'ACTIVE') ? 'ACTIVE' : 'PAUSED';
 
       return {
@@ -50,97 +48,31 @@ class CreativeController {
   }
 
   /**
-   * Helper to filter creatives by global search and multi-filters
-   */
-  static applyFilters(creatives, query) {
-    const {
-      search,
-      campaignId,
-      adsetId,
-      status,
-      badge,
-      category,
-      creativeType
-    } = query;
-
-    let filtered = [...creatives];
-
-    // 1. Global Search: campaign name, adset name, ad name, creative name
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(c => {
-        const matchesCreative = c.name.toLowerCase().includes(searchLower) || c.copyText?.toLowerCase().includes(searchLower);
-        const matchesAds = c.ads.some(ad => 
-          ad.adName.toLowerCase().includes(searchLower) ||
-          ad.campaignName.toLowerCase().includes(searchLower) ||
-          ad.adsetName.toLowerCase().includes(searchLower)
-        );
-        return matchesCreative || matchesAds;
-      });
-    }
-
-    // 2. Campaign Filter
-    if (campaignId) {
-      filtered = filtered.filter(c => c.ads.some(ad => ad.campaignId === campaignId));
-    }
-
-    // 3. Ad Set Filter
-    if (adsetId) {
-      filtered = filtered.filter(c => c.ads.some(ad => ad.adsetId === adsetId));
-    }
-
-    // 4. Status Filter
-    if (status) {
-      filtered = filtered.filter(c => c.status === status);
-    }
-
-    // 5. Performance Badge Filter
-    if (badge) {
-      filtered = filtered.filter(c => c.performanceBadge === badge);
-    }
-
-    // 6. Category Filter
-    if (category) {
-      filtered = filtered.filter(c => c.category === category);
-    }
-
-    // 7. Creative Type Filter
-    if (creativeType) {
-      if (creativeType === 'video') {
-        filtered = filtered.filter(c => c.isVideo);
-      } else if (creativeType === 'static') {
-        filtered = filtered.filter(c => !c.isVideo);
-      }
-    }
-
-    return filtered;
-  }
-
-  /**
    * GET /api/creatives
    * Fetch all creatives with aggregated insights, classifications, and performance badges
    */
   static async getCreatives(req, res, next) {
     try {
-      const { preset = 'last_7_days', since, until } = req.query;
+      const { preset = 'last_7_days', since, until, search, sort = 'metrics.spend', order = 'desc', page = 1, limit = 12 } = req.query;
       const user = req.user;
       const customRange = since && until ? { since, until } : null;
 
       const { current } = DateHelper.getRanges(preset, customRange);
 
-      // Cache check
       const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), 'creatives/list', {
         metaAccountId: user.metaAccountId,
         preset,
         current
       });
-      const cached = CacheService.get(cacheKey);
       
       let processed;
+      let isCached = false;
+      const cached = CacheService.get(cacheKey);
+      
       if (cached) {
         processed = cached;
+        isCached = true;
       } else {
-        // Fetch creatives and insights parallelly passing the user object
         const [creatives, adInsights] = await Promise.all([
           CreativeService.getSalesCreatives(user),
           InsightService.getAdInsights(user, current)
@@ -150,13 +82,40 @@ class CreativeController {
         CacheService.set(cacheKey, processed, 300);
       }
 
-      // Apply search and filter params in-memory (allows fast frontend filtering)
-      const filtered = CreativeController.applyFilters(processed, req.query);
+      // Apply Search
+      let filtered = processed;
+      if (search) {
+        filtered = FilterService.applySearch(filtered, search, [
+          'name',
+          'productName',
+          'headline',
+          'copyText',
+          'id'
+        ]);
+      }
+
+      // Apply dynamic multi-filters
+      filtered = FilterService.applyCreativeFilters(filtered, req.query);
+
+      // Apply Sorting
+      filtered = FilterService.applySorting(filtered, sort, order);
+
+      // Apply Pagination
+      const paginatedResult = FilterService.applyPagination(filtered, page, limit);
 
       res.status(200).json({
         success: true,
-        count: filtered.length,
-        data: filtered
+        message: 'Creatives list retrieved successfully',
+        data: paginatedResult.data,
+        pagination: paginatedResult.pagination,
+        meta: {
+          generatedAt: new Date().toISOString(),
+          cache: isCached,
+          dateRange: {
+            since: current.since,
+            until: current.until
+          }
+        }
       });
     } catch (error) {
       next(error);
@@ -165,7 +124,6 @@ class CreativeController {
 
   /**
    * GET /api/creatives/videos
-   * Filter and return video creatives only
    */
   static async getVideos(req, res, next) {
     req.query.creativeType = 'video';
@@ -174,7 +132,6 @@ class CreativeController {
 
   /**
    * GET /api/creatives/statics
-   * Filter and return static creatives only
    */
   static async getStatics(req, res, next) {
     req.query.creativeType = 'static';
@@ -183,28 +140,25 @@ class CreativeController {
 
   /**
    * GET /api/creatives/:id
-   * Fetch a single creative's details and detailed insights
+   * Progressive load stage 1: Fetch basic information
    */
   static async getCreativeById(req, res, next) {
     try {
       const { id: creativeId } = req.params;
-      const { preset = 'last_7_days', since, until } = req.query;
       const user = req.user;
-      const customRange = since && until ? { since, until } : null;
 
-      const { current } = DateHelper.getRanges(preset, customRange);
-
-      const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), `creatives/detail/${creativeId}`, {
-        metaAccountId: user.metaAccountId,
-        preset,
-        current
+      const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), `creatives/detail/basic/${creativeId}`, {
+        metaAccountId: user.metaAccountId
       });
       const cached = CacheService.get(cacheKey);
       if (cached) {
-        return res.status(200).json({ success: true, data: cached });
+        return res.status(200).json({
+          success: true,
+          data: cached,
+          meta: { generatedAt: new Date().toISOString(), cache: true }
+        });
       }
 
-      // Fetch all creatives and find the requested one
       const creatives = await CreativeService.getSalesCreatives(user);
       const creative = creatives.find(c => c.id === creativeId);
 
@@ -216,16 +170,249 @@ class CreativeController {
         });
       }
 
-      // Fetch insights for this creative's ads
+      // Run enrich to populate headline, cta, landingPage, productName, createdDate
+      const enriched = await CreativeService.enrichCreativeAssets([creative], user);
+      const result = enriched[0];
+
+      CacheService.set(cacheKey, result, 600); // basic info changes rarely, cache longer
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        meta: {
+          generatedAt: new Date().toISOString(),
+          cache: false
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/creatives/:id/performance
+   * Progressive load stage 2: Fetch performance summary
+   */
+  static async getCreativePerformance(req, res, next) {
+    try {
+      const { id: creativeId } = req.params;
+      const { preset = 'last_7_days', since, until } = req.query;
+      const user = req.user;
+      const customRange = since && until ? { since, until } : null;
+
+      const { current } = DateHelper.getRanges(preset, customRange);
+
+      const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), `creatives/detail/perf/${creativeId}`, {
+        metaAccountId: user.metaAccountId,
+        preset,
+        current
+      });
+
+      const cached = CacheService.get(cacheKey);
+      if (cached) {
+        return res.status(200).json({
+          success: true,
+          data: cached,
+          meta: { generatedAt: new Date().toISOString(), cache: true, dateRange: current }
+        });
+      }
+
+      const creatives = await CreativeService.getSalesCreatives(user);
+      const creative = creatives.find(c => c.id === creativeId);
+
+      if (!creative) {
+        return res.status(404).json({
+          success: false,
+          message: 'Ad creative not found.'
+        });
+      }
+
       const adInsights = await InsightService.getAdInsights(user, current);
-      const processedList = CreativeController.processCreativesWithInsights([creative], adInsights);
-      const result = processedList[0];
+      const processed = CreativeController.processCreativesWithInsights([creative], adInsights);
+      const result = processed[0].metrics;
 
       CacheService.set(cacheKey, result, 300);
 
       res.status(200).json({
         success: true,
-        data: result
+        data: result,
+        meta: {
+          generatedAt: new Date().toISOString(),
+          cache: false,
+          dateRange: current
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/creatives/:id/timeline
+   * Progressive load stage 3: Fetch historical daily trends
+   */
+  static async getCreativeTimeline(req, res, next) {
+    try {
+      const { id: creativeId } = req.params;
+      const { preset = 'last_30_days', since, until } = req.query;
+      const user = req.user;
+      const customRange = since && until ? { since, until } : null;
+
+      const { current } = DateHelper.getRanges(preset, customRange);
+
+      const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), `creatives/detail/timeline/${creativeId}`, {
+        metaAccountId: user.metaAccountId,
+        preset,
+        current
+      });
+
+      const cached = CacheService.get(cacheKey);
+      if (cached) {
+        return res.status(200).json({
+          success: true,
+          data: cached,
+          meta: { generatedAt: new Date().toISOString(), cache: true, dateRange: current }
+        });
+      }
+
+      const creatives = await CreativeService.getSalesCreatives(user);
+      const creative = creatives.find(c => c.id === creativeId);
+
+      if (!creative) {
+        return res.status(404).json({
+          success: false,
+          message: 'Ad creative not found.'
+        });
+      }
+
+      const adIds = creative.ads?.map(ad => ad.adId) || [];
+      if (adIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          meta: { generatedAt: new Date().toISOString(), cache: false, dateRange: current }
+        });
+      }
+
+      const accountId = user.metaAccountId;
+      const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+      
+      const response = await MetaService.get(`${formattedAccountId}/insights`, user, {
+        level: 'ad',
+        time_increment: 1,
+        fields: 'ad_id,spend,impressions,clicks,actions,action_values,date_start',
+        filtering: [{ field: 'ad.id', operator: 'IN', value: adIds }],
+        time_range: current,
+        limit: 1000
+      });
+
+      const dailyMap = new Map();
+      (response.data || []).forEach(item => {
+        const date = item.date_start;
+        const spend = parseFloat(item.spend || 0);
+        const clicks = parseInt(item.clicks || 0, 10);
+        const impressions = parseInt(item.impressions || 0, 10);
+        const purchases = InsightService.getPurchaseActions(item.actions);
+        const value = InsightService.getPurchaseActions(item.action_values);
+
+        if (!dailyMap.has(date)) {
+          dailyMap.set(date, { date, spend: 0, clicks: 0, impressions: 0, purchases: 0, revenue: 0 });
+        }
+
+        const entry = dailyMap.get(date);
+        entry.spend += spend;
+        entry.clicks += clicks;
+        entry.impressions += impressions;
+        entry.purchases += purchases;
+        entry.revenue += value;
+      });
+
+      const timeline = Array.from(dailyMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date));
+      const enrichedTimeline = timeline.map(day => {
+        const ctr = day.impressions > 0 ? (day.clicks / day.impressions) * 100 : 0;
+        const roas = day.spend > 0 ? day.revenue / day.spend : 0;
+        const cpa = day.purchases > 0 ? day.spend / day.purchases : 0;
+        return {
+          ...day,
+          ctr: parseFloat(ctr.toFixed(2)),
+          roas: parseFloat(roas.toFixed(2)),
+          cpa: parseFloat(cpa.toFixed(2))
+        };
+      });
+
+      CacheService.set(cacheKey, enrichedTimeline, 300);
+
+      res.status(200).json({
+        success: true,
+        data: enrichedTimeline,
+        meta: {
+          generatedAt: new Date().toISOString(),
+          cache: false,
+          dateRange: current
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/creatives/:id/insights
+   * Progressive load stage 4: AI Recommendations
+   */
+  static async getCreativeInsights(req, res, next) {
+    try {
+      const { id: creativeId } = req.params;
+      const { preset = 'last_7_days', since, until } = req.query;
+      const user = req.user;
+      const customRange = since && until ? { since, until } : null;
+
+      const { current } = DateHelper.getRanges(preset, customRange);
+
+      const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), `creatives/detail/insights/${creativeId}`, {
+        metaAccountId: user.metaAccountId,
+        preset,
+        current
+      });
+
+      const cached = CacheService.get(cacheKey);
+      if (cached) {
+        return res.status(200).json({
+          success: true,
+          data: cached,
+          meta: { generatedAt: new Date().toISOString(), cache: true, dateRange: current }
+        });
+      }
+
+      const creatives = await CreativeService.getSalesCreatives(user);
+      const creative = creatives.find(c => c.id === creativeId);
+
+      if (!creative) {
+        return res.status(404).json({
+          success: false,
+          message: 'Ad creative not found.'
+        });
+      }
+
+      const adInsights = await InsightService.getAdInsights(user, current);
+      const processed = CreativeController.processCreativesWithInsights([creative], adInsights);
+      
+      const enrichedCreative = processed[0];
+      const insights = RecommendationService.generateCreativeRecommendations(
+        enrichedCreative.metrics,
+        enrichedCreative
+      );
+
+      CacheService.set(cacheKey, insights, 300);
+
+      res.status(200).json({
+        success: true,
+        data: insights,
+        meta: {
+          generatedAt: new Date().toISOString(),
+          cache: false,
+          dateRange: current
+        }
       });
     } catch (error) {
       next(error);

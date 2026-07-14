@@ -1,4 +1,5 @@
 import MetaService from './metaService.js';
+import { campaignFields } from '../config/metaFields.js';
 
 class CampaignService {
   /**
@@ -10,11 +11,11 @@ class CampaignService {
     const endpoint = `${formattedAccountId}/campaigns`;
     
     const params = {
-      fields: 'id,name,status,objective,daily_budget,lifetime_budget,budget_remaining,buying_type,start_time,stop_time,created_time,updated_time',
+      fields: campaignFields,
       limit: 1000
     };
 
-    const response = await MetaService.get(endpoint, user, params);
+    const response = await MetaService.get(endpoint, user, params, { resourceType: 'campaign' });
     
     // Filter campaigns by OUTCOME_SALES objective only (ignore others as required)
     const campaigns = response.data || [];
@@ -26,9 +27,9 @@ class CampaignService {
    */
   static async getCampaignById(user, campaignId) {
     const params = {
-      fields: 'id,name,status,objective,daily_budget,lifetime_budget,budget_remaining,buying_type,start_time,stop_time,created_time,updated_time'
+      fields: campaignFields
     };
-    return await MetaService.get(campaignId, user, params);
+    return await MetaService.get(campaignId, user, params, { resourceType: 'campaign' });
   }
 }
 

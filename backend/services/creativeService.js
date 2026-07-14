@@ -1,6 +1,7 @@
 import MetaService from './metaService.js';
 import CampaignService from './campaignService.js';
 import MediaService from './mediaService.js';
+import { adFields } from '../config/metaFields.js';
 
 class CreativeService {
   /**
@@ -18,11 +19,11 @@ class CreativeService {
     const accountId = user.metaAccountId;
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
     
-    // 2. Fetch ads with creative details
+    // 2. Fetch ads with creative details using centralized fields
     const adsResponse = await MetaService.get(`${formattedAccountId}/ads`, user, {
-      fields: 'id,name,status,campaign_id,adset_id,campaign{id,name,objective},adset{id,name},creative{id,name,image_url,thumbnail_url,video_id,body}',
+      fields: adFields.join(','),
       limit: 250
-    });
+    }, { resourceType: 'ad' });
 
     const ads = adsResponse.data || [];
     
@@ -45,6 +46,9 @@ class CreativeService {
           thumbnail_url: ad.creative.thumbnail_url,
           video_id: ad.creative.video_id,
           object_story_spec: ad.creative.object_story_spec,
+          asset_feed_spec: ad.creative.asset_feed_spec,
+          product_set_id: ad.creative.product_set_id,
+          created_time: ad.creative.created_time || null,
           ads: []
         });
       }
@@ -56,7 +60,8 @@ class CreativeService {
         campaignId: ad.campaign_id,
         campaignName: ad.campaign?.name || 'Unnamed Campaign',
         adsetId: ad.adset_id,
-        adsetName: ad.adset?.name || 'Unnamed Ad Set'
+        adsetName: ad.adset?.name || 'Unnamed Ad Set',
+        createdTime: ad.created_time
       });
     });
 
@@ -66,11 +71,19 @@ class CreativeService {
     // 5. Enrich creatives with high-resolution media URLs (via MediaService)
     const enrichedCreatives = await MediaService.enrichCreativeAssets(rawCreatives, user);
 
-    // Merge the ads lists back into enriched creatives
+    // Merge the ads lists back into enriched creatives and derive created_time
     return enrichedCreatives.map(ec => {
       const original = creativeMap.get(ec.id);
+      
+      // Derive creation date from the earliest linked ad
+      const earliestAdTime = original.ads.reduce((min, curr) => {
+        if (!curr.createdTime) return min;
+        return (!min || new Date(curr.createdTime) < new Date(min)) ? curr.createdTime : min;
+      }, null);
+
       return {
         ...ec,
+        created_time: earliestAdTime || ec.created_time || null,
         ads: original.ads
       };
     });
