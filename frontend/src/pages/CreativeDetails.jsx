@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, ArrowLeft, Video, Sparkles, AlertTriangle, ShieldCheck, CheckCircle } from 'lucide-react';
@@ -25,7 +26,7 @@ const CreativeDetails = () => {
     setLoading(true);
     setError(null);
     try {
-      let url = `http://localhost:5000/api/creatives/${creativeId}?preset=${datePreset}`;
+      let url = `${API_URL}/api/creatives/${creativeId}?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -52,7 +53,7 @@ const CreativeDetails = () => {
     setAiLoading(true);
     setAiError(null);
     try {
-      const response = await axios.post(`http://localhost:5000/api/analysis/creative`, {
+      const response = await axios.post(`${API_URL}/api/analysis/creative`, {
         creativeId: creative.id,
         name: creative.name,
         copyText: creative.copyText,

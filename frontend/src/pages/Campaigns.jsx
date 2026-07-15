@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
@@ -31,7 +32,7 @@ const Campaigns = () => {
   const { data: campaignResponse, isLoading: loading, error: queryError, refetch: fetchCampaigns } = useQuery({
     queryKey: ['campaigns', { page, limit, search, status, sort, order, datePreset, customRange, refreshTrigger }],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${status}&sort=${sort}&order=${order}&datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${status}&sort=${sort}&order=${order}&datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -63,7 +64,7 @@ const Campaigns = () => {
   };
 
   const handleExport = () => {
-    let url = `http://localhost:5000/api/campaigns/export?search=${encodeURIComponent(search)}&status=${status}&sort=${sort}&order=${order}&datePreset=${datePreset}`;
+    let url = `${API_URL}/api/campaigns/export?search=${encodeURIComponent(search)}&status=${status}&sort=${sort}&order=${order}&datePreset=${datePreset}`;
     if (datePreset === 'custom' && customRange.since && customRange.until) {
       url += `&since=${customRange.since}&until=${customRange.until}`;
     }

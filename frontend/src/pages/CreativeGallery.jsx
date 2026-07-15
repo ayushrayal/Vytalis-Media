@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { CreativeCardSkeleton } from '../components/LoadingSkeleton';
@@ -58,7 +59,7 @@ const CreativeGallery = () => {
         }
       });
 
-      const response = await axios.get('http://localhost:5000/api/creatives', { params });
+      const response = await axios.get(`${API_URL}/api/creatives`, { params });
       return response.data;
     },
     enabled: !isCustomAndIncomplete

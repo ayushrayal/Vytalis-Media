@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import {
   X, Info, Calendar, TrendingUp, Sparkles, Award, BarChart2,
@@ -32,7 +33,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
   const { data, isLoading: loading, error: queryError, refetch: fetchDetails } = useQuery({
     queryKey: ['campaignDetails', campaignId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns/${campaignId}?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -49,7 +50,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
   const { data: trendsData, isLoading: trendsLoading, error: trendsError, refetch: refetchTrends } = useQuery({
     queryKey: ['campaignTrends', campaignId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}/trends?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns/${campaignId}/trends?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -64,7 +65,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
   const { data: adsetData, isLoading: adsetsLoading, error: adsetsError, refetch: refetchAdsets } = useQuery({
     queryKey: ['campaignAdsets', campaignId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}/adsets?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns/${campaignId}/adsets?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -79,7 +80,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
   const { data: creativesData, isLoading: creativesLoading, error: creativesError, refetch: refetchCreatives } = useQuery({
     queryKey: ['campaignCreatives', campaignId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}/creatives?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns/${campaignId}/creatives?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -94,7 +95,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
   const { data: breakdownsData, isLoading: breakdownsLoading, error: breakdownsError, refetch: refetchBreakdowns } = useQuery({
     queryKey: ['campaignBreakdowns', campaignId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}/breakdowns?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns/${campaignId}/breakdowns?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -109,7 +110,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
   const { data: recommendationsData, isLoading: recommendationsLoading, error: recommendationsError, refetch: refetchRecommendations } = useQuery({
     queryKey: ['campaignRecommendations', campaignId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}/recommendations?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/campaigns/${campaignId}/recommendations?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }

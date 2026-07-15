@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useDashboard } from '../context/DashboardContext';
 import { KpiSkeleton } from '../components/LoadingSkeleton';
 import { Users, AlertCircle, ArrowRight, ShieldCheck, MapPin, Calendar, Award } from 'lucide-react';
@@ -25,7 +26,7 @@ const AudienceReports = () => {
     setLoading(true);
     setError(null);
     try {
-      let url = `http://localhost:5000/api/dashboard/breakdowns?preset=${datePreset}`;
+      let url = `${API_URL}/api/dashboard/breakdowns?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }

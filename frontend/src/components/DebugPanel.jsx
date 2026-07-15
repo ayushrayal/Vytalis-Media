@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { Terminal, X, RefreshCw, Activity, Database, AlertCircle, ShieldAlert, Cpu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -18,7 +19,7 @@ const DebugPanel = () => {
   const fetchMetrics = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/debug/meta');
+      const response = await axios.get(`${API_URL}/api/debug/meta`);
       setMetrics(response.data);
       setError(null);
     } catch (err) {

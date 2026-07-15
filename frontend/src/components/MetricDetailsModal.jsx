@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { X, TrendingUp, TrendingDown, Info, Calculator, Calendar } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Shimmer } from './LoadingSkeleton';
@@ -34,7 +35,7 @@ const MetricDetailsModal = ({
         firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
       }
       const todayStr = new Date().toISOString().split('T')[0];
-      const url = `http://localhost:5000/api/dashboard/trends?preset=custom&since=${firstDay}&until=${todayStr}`;
+      const url = `${API_URL}/api/dashboard/trends?preset=custom&since=${firstDay}&until=${todayStr}`;
       const response = await axios.get(url);
       return response.data.data || [];
     },

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
@@ -17,7 +18,7 @@ const Adsets = () => {
   const { data: creativeResponse, isLoading: loading, error: queryError, refetch: fetchAdsets } = useQuery({
     queryKey: ['creatives-adsets', { datePreset, customRange, refreshTrigger }],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/creatives?preset=${datePreset}`;
+      let url = `${API_URL}/api/creatives?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }

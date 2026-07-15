@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { Sparkles, Video, MessageSquare, AlertTriangle, FileText, Send } from 'lucide-react';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
@@ -30,7 +31,7 @@ const AIInsights = () => {
     setScriptError('');
     setScriptResult('');
     try {
-      const response = await axios.post('http://localhost:5000/api/analysis/script', {
+      const response = await axios.post(`${API_URL}/api/analysis/script`, {
         productName,
         productDescription: productDesc,
         angle: scriptAngle
@@ -52,7 +53,7 @@ const AIInsights = () => {
     setHooksError('');
     setHooksResult('');
     try {
-      const response = await axios.post('http://localhost:5000/api/analysis/hooks', {
+      const response = await axios.post(`${API_URL}/api/analysis/hooks`, {
         copyText: originalCopy,
         category: hookCategory
       });

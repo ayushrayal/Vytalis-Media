@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { KpiSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
@@ -54,7 +55,7 @@ const Dashboard = () => {
   const { data, isLoading: loading, error: overviewError, refetch: fetchOverview } = useQuery({
     queryKey: ['dashboardOverview', datePreset, customRange, refreshTrigger],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/dashboard/overview?preset=${datePreset}`;
+      let url = `${API_URL}/api/dashboard/overview?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -70,7 +71,7 @@ const Dashboard = () => {
   const { data: trendsRaw, isLoading: loadingTrends, error: trendsQueryError, refetch: fetchTrends } = useQuery({
     queryKey: ['dashboardTrends', datePreset, customRange, refreshTrigger],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/dashboard/trends?preset=${datePreset}`;
+      let url = `${API_URL}/api/dashboard/trends?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }

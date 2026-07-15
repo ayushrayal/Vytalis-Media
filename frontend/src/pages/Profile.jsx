@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { User, Mail, Shield, Key, Eye, EyeOff, Save, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const Profile = () => {
@@ -49,7 +50,7 @@ const Profile = () => {
         payload.password = password;
       }
 
-      const response = await axios.put('http://localhost:5000/api/auth/profile', payload);
+      const response = await axios.put(`${API_URL}/api/auth/profile`, payload);
       
       updateProfile(response.data.data.user);
       setMessage('Profile settings saved successfully!');

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
@@ -68,7 +69,7 @@ const StaticAnalysis = () => {
         }
       });
 
-      const response = await axios.get('http://localhost:5000/api/creatives/statics', { params });
+      const response = await axios.get(`${API_URL}/api/creatives/statics`, { params });
       return response.data;
     },
     enabled: !isCustomAndIncomplete

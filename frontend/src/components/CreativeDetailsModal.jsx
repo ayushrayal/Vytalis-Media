@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useQuery } from '@tanstack/react-query';
 import { X, Award, BarChart2, Calendar, Sparkles, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from 'lucide-react';
 import CreativeImage from './CreativeImage';
@@ -23,7 +24,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
   const { data: basicData, isLoading: loadingBasic, error: basicQueryError, refetch: fetchBasic } = useQuery({
     queryKey: ['creativeBasic', creativeId],
     queryFn: async () => {
-      const response = await axios.get(`http://localhost:5000/api/creatives/${creativeId}`);
+      const response = await axios.get(`${API_URL}/api/creatives/${creativeId}`);
       return response.data.data;
     },
     enabled: !!isOpen && !!creativeId && activeTab === 'info',
@@ -35,7 +36,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
   const { data: perfData, isLoading: loadingPerf, error: perfQueryError, refetch: fetchPerf } = useQuery({
     queryKey: ['creativePerf', creativeId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/creatives/${creativeId}/performance?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/creatives/${creativeId}/performance?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -51,7 +52,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
   const { data: timelineData, isLoading: loadingTimeline, error: timelineQueryError, refetch: fetchTimeline } = useQuery({
     queryKey: ['creativeTimeline', creativeId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/creatives/${creativeId}/timeline?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/creatives/${creativeId}/timeline?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -67,7 +68,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
   const { data: insightsData, isLoading: loadingInsights, error: insightsQueryError, refetch: fetchInsights } = useQuery({
     queryKey: ['creativeInsights', creativeId, datePreset, customRange],
     queryFn: async () => {
-      let url = `http://localhost:5000/api/creatives/${creativeId}/insights?datePreset=${datePreset}`;
+      let url = `${API_URL}/api/creatives/${creativeId}/insights?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }

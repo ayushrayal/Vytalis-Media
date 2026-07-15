@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
 import {
@@ -30,7 +31,7 @@ const PlacementReports = () => {
     setLoading(true);
     setError(null);
     try {
-      let url = `http://localhost:5000/api/dashboard/breakdowns?preset=${datePreset}`;
+      let url = `${API_URL}/api/dashboard/breakdowns?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
