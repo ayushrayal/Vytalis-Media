@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { KpiSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
 import SectionError from '../components/SectionError';
@@ -31,7 +32,8 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatCompact } from '../utils/formatter';
 import MetricCard from '../components/MetricCard';
-import MetricDetailsModal from '../components/MetricDetailsModal';
+
+const MetricDetailsModal = React.lazy(() => import('../components/MetricDetailsModal'));
 
 const Dashboard = () => {
   const {
@@ -44,61 +46,42 @@ const Dashboard = () => {
     setCustomRange
   } = useDashboard();
 
-  const [loading, setLoading] = useState(true);
-  const [loadingTrends, setLoadingTrends] = useState(true);
-  const [error, setError] = useState(null);
-  const [trendsError, setTrendsError] = useState(null);
-  const [data, setData] = useState(null);
-  const [trends, setTrends] = useState([]);
   const [selectedMetric, setSelectedMetric] = useState(null);
 
-  // Fetch overview KPIs
-  const fetchOverview = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const isCustomAndIncomplete = datePreset === 'custom' && (!customRange.since || !customRange.until);
+
+  // Fetch overview KPIs via React Query
+  const { data, isLoading: loading, error: overviewError, refetch: fetchOverview } = useQuery({
+    queryKey: ['dashboardOverview', datePreset, customRange, refreshTrigger],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/dashboard/overview?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
-
       const response = await axios.get(url);
-      setData(response.data.data);
-    } catch (err) {
-      console.error('Failed to fetch overview metrics:', err);
-      setError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [datePreset, customRange, refreshTrigger]);
+      return response.data.data;
+    },
+    enabled: !isCustomAndIncomplete
+  });
 
-  // Fetch trend timelines
-  const fetchTrends = useCallback(async () => {
-    setLoadingTrends(true);
-    setTrendsError(null);
-    try {
+  const error = overviewError ? getFriendlyErrorMessage(overviewError) : null;
+
+  // Fetch trend timelines via React Query
+  const { data: trendsRaw, isLoading: loadingTrends, error: trendsQueryError, refetch: fetchTrends } = useQuery({
+    queryKey: ['dashboardTrends', datePreset, customRange, refreshTrigger],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/dashboard/trends?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
-
       const response = await axios.get(url);
-      setTrends(response.data.data || []);
-    } catch (err) {
-      console.error('Failed to fetch trend timelines:', err);
-      setTrendsError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoadingTrends(false);
-    }
-  }, [datePreset, customRange, refreshTrigger]);
+      return response.data.data || [];
+    },
+    enabled: !isCustomAndIncomplete
+  });
 
-  useEffect(() => {
-    if (datePreset === 'custom' && (!customRange.since || !customRange.until)) {
-      return;
-    }
-    fetchOverview();
-    fetchTrends();
-  }, [fetchOverview, fetchTrends, datePreset, customRange]);
+  const trends = trendsRaw || [];
+  const trendsError = trendsQueryError ? getFriendlyErrorMessage(trendsQueryError) : null;
 
   // Export data to CSV
   const exportToCSV = () => {
@@ -423,19 +406,21 @@ const Dashboard = () => {
       </div>
 
       {selectedMetric && (
-        <MetricDetailsModal
-          isOpen={!!selectedMetric}
-          onClose={() => setSelectedMetric(null)}
-          metricKey={selectedMetric.key}
-          metricTitle={selectedMetric.title}
-          currentValue={selectedMetric.currentValue}
-          previousValue={selectedMetric.previousValue}
-          pct={selectedMetric.pct}
-          direction={selectedMetric.direction}
-          isCurrency={selectedMetric.isCurrency}
-          isPercent={selectedMetric.isPercent}
-          startDateStr={data?.dateRange?.since}
-        />
+        <React.Suspense fallback={null}>
+          <MetricDetailsModal
+            isOpen={!!selectedMetric}
+            onClose={() => setSelectedMetric(null)}
+            metricKey={selectedMetric.key}
+            metricTitle={selectedMetric.title}
+            currentValue={selectedMetric.currentValue}
+            previousValue={selectedMetric.previousValue}
+            pct={selectedMetric.pct}
+            direction={selectedMetric.direction}
+            isCurrency={selectedMetric.isCurrency}
+            isPercent={selectedMetric.isPercent}
+            startDateStr={data?.dateRange?.since}
+          />
+        </React.Suspense>
       )}
 
       <style>{`

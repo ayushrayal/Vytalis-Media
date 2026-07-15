@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { X, Award, BarChart2, Calendar, Sparkles, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from 'lucide-react';
 import CreativeImage from './CreativeImage';
 import { Shimmer } from './LoadingSkeleton';
@@ -10,120 +11,73 @@ import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, 
 
 const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customRange }) => {
   const [activeTab, setActiveTab] = useState('info');
-  
-  // Local cache variables
-  const [basicData, setBasicData] = useState(null);
-  const [loadingBasic, setLoadingBasic] = useState(false);
-  const [basicError, setBasicError] = useState(null);
 
-  const [perfData, setPerfData] = useState(null);
-  const [loadingPerf, setLoadingPerf] = useState(false);
-  const [perfError, setPerfError] = useState(null);
-
-  const [timelineData, setTimelineData] = useState(null);
-  const [loadingTimeline, setLoadingTimeline] = useState(false);
-  const [timelineError, setTimelineError] = useState(null);
-
-  const [insightsData, setInsightsData] = useState(null);
-  const [loadingInsights, setLoadingInsights] = useState(false);
-  const [insightsError, setInsightsError] = useState(null);
-
-  // Clear cache whenever creativeId changes
+  // Reset tab selection when modal opens/closes or creative changes
   useEffect(() => {
-    setBasicData(null);
-    setPerfData(null);
-    setTimelineData(null);
-    setInsightsData(null);
-    setActiveTab('info');
-  }, [creativeId]);
-
-  // Progressive fetching callbacks
-  const fetchBasic = useCallback(async (force = false) => {
-    if (!creativeId) return;
-    if (!force && basicData) return;
-    setLoadingBasic(true);
-    setBasicError(null);
-    try {
-      const response = await axios.get(`http://localhost:5000/api/creatives/${creativeId}`);
-      setBasicData(response.data.data);
-    } catch (err) {
-      setBasicError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoadingBasic(false);
+    if (isOpen) {
+      setActiveTab('info');
     }
-  }, [creativeId, basicData]);
+  }, [isOpen, creativeId]);
 
-  const fetchPerf = useCallback(async (force = false) => {
-    if (!creativeId) return;
-    if (!force && perfData) return;
-    setLoadingPerf(true);
-    setPerfError(null);
-    try {
+  // 1. Basic details query
+  const { data: basicData, isLoading: loadingBasic, error: basicQueryError, refetch: fetchBasic } = useQuery({
+    queryKey: ['creativeBasic', creativeId],
+    queryFn: async () => {
+      const response = await axios.get(`http://localhost:5000/api/creatives/${creativeId}`);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!creativeId && activeTab === 'info',
+    staleTime: 5 * 60 * 1000
+  });
+  const basicError = basicQueryError ? getFriendlyErrorMessage(basicQueryError) : null;
+
+  // 2. Performance metrics query
+  const { data: perfData, isLoading: loadingPerf, error: perfQueryError, refetch: fetchPerf } = useQuery({
+    queryKey: ['creativePerf', creativeId, datePreset, customRange],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/creatives/${creativeId}/performance?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
       const response = await axios.get(url);
-      setPerfData(response.data.data);
-    } catch (err) {
-      setPerfError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoadingPerf(false);
-    }
-  }, [creativeId, datePreset, customRange, perfData]);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!creativeId && activeTab === 'performance',
+    staleTime: 5 * 60 * 1000
+  });
+  const perfError = perfQueryError ? getFriendlyErrorMessage(perfQueryError) : null;
 
-  const fetchTimeline = useCallback(async (force = false) => {
-    if (!creativeId) return;
-    if (!force && timelineData) return;
-    setLoadingTimeline(true);
-    setTimelineError(null);
-    try {
+  // 3. Timeline daily metrics query
+  const { data: timelineData, isLoading: loadingTimeline, error: timelineQueryError, refetch: fetchTimeline } = useQuery({
+    queryKey: ['creativeTimeline', creativeId, datePreset, customRange],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/creatives/${creativeId}/timeline?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
       const response = await axios.get(url);
-      setTimelineData(response.data.data);
-    } catch (err) {
-      setTimelineError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoadingTimeline(false);
-    }
-  }, [creativeId, datePreset, customRange, timelineData]);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!creativeId && activeTab === 'timeline',
+    staleTime: 5 * 60 * 1000
+  });
+  const timelineError = timelineQueryError ? getFriendlyErrorMessage(timelineQueryError) : null;
 
-  const fetchInsights = useCallback(async (force = false) => {
-    if (!creativeId) return;
-    if (!force && insightsData) return;
-    setLoadingInsights(true);
-    setInsightsError(null);
-    try {
+  // 4. AI insights query
+  const { data: insightsData, isLoading: loadingInsights, error: insightsQueryError, refetch: fetchInsights } = useQuery({
+    queryKey: ['creativeInsights', creativeId, datePreset, customRange],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/creatives/${creativeId}/insights?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
       const response = await axios.get(url);
-      setInsightsData(response.data.data);
-    } catch (err) {
-      setInsightsError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoadingInsights(false);
-    }
-  }, [creativeId, datePreset, customRange, insightsData]);
-
-  // Progressive fetching based on activeTab
-  useEffect(() => {
-    if (!isOpen || !creativeId) return;
-
-    if (activeTab === 'info') {
-      fetchBasic();
-    } else if (activeTab === 'performance') {
-      fetchPerf();
-    } else if (activeTab === 'timeline') {
-      fetchTimeline();
-    } else if (activeTab === 'insights') {
-      fetchInsights();
-    }
-  }, [isOpen, creativeId, activeTab, fetchBasic, fetchPerf, fetchTimeline, fetchInsights]);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!creativeId && activeTab === 'insights',
+    staleTime: 5 * 60 * 1000
+  });
+  const insightsError = insightsQueryError ? getFriendlyErrorMessage(insightsQueryError) : null;
 
   if (!isOpen) return null;
 
@@ -256,7 +210,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                   ) : basicError ? (
                     <SectionError
                       message={basicError}
-                      onRetry={() => fetchBasic(true)}
+                      onRetry={fetchBasic}
                       isRetrying={loadingBasic}
                     />
                   ) : basicData ? (
@@ -305,7 +259,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                   ) : perfError ? (
                     <SectionError
                       message={perfError}
-                      onRetry={() => fetchPerf(true)}
+                      onRetry={fetchPerf}
                       isRetrying={loadingPerf}
                     />
                   ) : perfData ? (
@@ -338,7 +292,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                   ) : timelineError ? (
                     <SectionError
                       message={timelineError}
-                      onRetry={() => fetchTimeline(true)}
+                      onRetry={fetchTimeline}
                       isRetrying={loadingTimeline}
                     />
                   ) : timelineData && timelineData.length > 0 ? (
@@ -372,7 +326,7 @@ const CreativeDetailsModal = ({ isOpen, onClose, creativeId, datePreset, customR
                   ) : insightsError ? (
                     <SectionError
                       message={insightsError}
-                      onRetry={() => fetchInsights(true)}
+                      onRetry={fetchInsights}
                       isRetrying={loadingInsights}
                     />
                   ) : insightsData && insightsData.length > 0 ? (

@@ -4,6 +4,7 @@ import MediaService from './mediaService.js';
 import InsightService from './insightService.js';
 import RecommendationService from './recommendationService.js';
 import { adFields } from '../config/metaFields.js';
+import CacheService from './cacheService.js';
 
 class CreativeService {
   /**
@@ -92,9 +93,15 @@ class CreativeService {
   }
 
   /**
-   * Fetch a single creative by ID and run dedicated enrichment
+   * Fetch base creative data (enriched creative details, parent campaign metadata, ad IDs) and cache for 6 hours.
    */
-  static async getCreativeById(user, creativeId) {
+  static async getCreativeBaseData(user, creativeId) {
+    const cacheKey = `creative_base::${creativeId}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const accountId = user.metaAccountId;
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
 
@@ -141,28 +148,64 @@ class CreativeService {
 
     // Enrich single creative (with forceEnrich = true)
     const enriched = await MediaService.enrichCreativeAssets([rawCreative], user, true);
-    const result = enriched[0];
+    const enrichedCreative = enriched[0];
 
     const earliestAdTime = rawCreative.ads.reduce((min, curr) => {
       if (!curr.createdTime) return min;
       return (!min || new Date(curr.createdTime) < new Date(min)) ? curr.createdTime : min;
     }, null);
 
-    return {
-      ...result,
-      created_time: earliestAdTime || result.created_time || null,
+    const creative = {
+      ...enrichedCreative,
+      created_time: earliestAdTime || enrichedCreative.created_time || null,
       ads: rawCreative.ads
     };
+
+    // Find campaign metadata
+    let campaign = null;
+    const campaignId = creative.ads[0]?.campaignId;
+    if (campaignId) {
+      campaign = salesCampaigns.find(c => c.id === campaignId) || null;
+      if (!campaign) {
+        try {
+          campaign = await CampaignService.getCampaignById(user, campaignId);
+        } catch (err) {
+          console.warn(`Failed to fetch campaign metadata for ${campaignId}:`, err.message);
+        }
+      }
+    }
+
+    const adIds = creative.ads.map(ad => ad.adId);
+
+    const baseData = {
+      creative,
+      campaign,
+      adIds,
+      campaignId
+    };
+
+    // Store in cache for 6 hours
+    CacheService.set(cacheKey, baseData, 21600);
+
+    return baseData;
+  }
+
+  /**
+   * Fetch a single creative by ID and run dedicated enrichment (backed by creative_base cache)
+   */
+  static async getCreativeById(user, creativeId) {
+    const baseData = await this.getCreativeBaseData(user, creativeId);
+    return baseData ? baseData.creative : null;
   }
 
   /**
    * Fetch single creative performance metrics specifically filtered by its linked ads
    */
   static async getCreativePerformance(user, creativeId, timeRange) {
-    const creative = await this.getCreativeById(user, creativeId);
-    if (!creative) return null;
+    const baseData = await this.getCreativeBaseData(user, creativeId);
+    if (!baseData) return null;
 
-    const adIds = creative.ads.map(ad => ad.adId);
+    const { adIds } = baseData;
     if (adIds.length === 0) return {};
 
     const adInsights = await InsightService.getAdInsights(user, timeRange, adIds);
@@ -173,10 +216,10 @@ class CreativeService {
    * Fetch single creative daily timeline historical trends specifically filtered by its linked ads
    */
   static async getCreativeTimeline(user, creativeId, timeRange) {
-    const creative = await this.getCreativeById(user, creativeId);
-    if (!creative) return null;
+    const baseData = await this.getCreativeBaseData(user, creativeId);
+    if (!baseData) return null;
 
-    const adIds = creative.ads.map(ad => ad.adId);
+    const { adIds } = baseData;
     if (adIds.length === 0) return [];
 
     const accountId = user.metaAccountId;
@@ -230,11 +273,11 @@ class CreativeService {
    * Fetch recommendations specifically for a single creative
    */
   static async getCreativeRecommendations(user, creativeId, timeRange) {
-    const creative = await this.getCreativeById(user, creativeId);
-    if (!creative) return null;
+    const baseData = await this.getCreativeBaseData(user, creativeId);
+    if (!baseData) return null;
 
     const metrics = await this.getCreativePerformance(user, creativeId, timeRange);
-    return RecommendationService.generateCreativeRecommendations(metrics, creative);
+    return RecommendationService.generateCreativeRecommendations(metrics, baseData.creative);
   }
 }
 

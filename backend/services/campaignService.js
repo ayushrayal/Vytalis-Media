@@ -1,5 +1,7 @@
 import MetaService from './metaService.js';
 import { campaignFields } from '../config/metaFields.js';
+import CreativeService from './creativeService.js';
+import CacheService from './cacheService.js';
 
 class CampaignService {
   /**
@@ -30,6 +32,34 @@ class CampaignService {
       fields: campaignFields
     };
     return await MetaService.get(campaignId, user, params, { resourceType: 'campaign' });
+  }
+
+  /**
+   * Fetch base campaign data (metadata, linked creatives, and ad sets) and cache for 6 hours
+   */
+  static async getCampaignBaseData(user, campaignId) {
+    const cacheKey = `campaign_base::${campaignId}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const campaign = await this.getCampaignById(user, campaignId);
+    
+    const allSalesCreatives = await CreativeService.getSalesCreatives(user, false);
+    const creatives = allSalesCreatives.filter(c =>
+      c.ads.some(ad => ad.campaignId === campaignId)
+    );
+
+    const adsetRes = await MetaService.get(`${campaignId}/adsets`, user, {
+      fields: 'id,name,status,created_time',
+      limit: 1000
+    }, { resourceType: 'adset' });
+    const adSets = adsetRes.data || [];
+
+    const baseData = { campaign, creatives, adSets };
+    CacheService.set(cacheKey, baseData, 21600); // 6 hours
+    return baseData;
   }
 }
 

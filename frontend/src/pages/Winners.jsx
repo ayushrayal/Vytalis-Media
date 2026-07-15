@@ -1,22 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { CreativeCardSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, Award, Video, SlidersHorizontal } from 'lucide-react';
 import { formatCurrency } from '../utils/formatter';
 import CreativeImage from '../components/CreativeImage';
-import FilterDrawer from '../components/FilterDrawer';
-import CreativeDetailsModal from '../components/CreativeDetailsModal';
 import SectionError from '../components/SectionError';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
+const FilterDrawer = React.lazy(() => import('../components/FilterDrawer'));
+const CreativeDetailsModal = React.lazy(() => import('../components/CreativeDetailsModal'));
+
 const Winners = () => {
   const { datePreset, customRange, refreshTrigger, globalSearch } = useDashboard();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [creatives, setCreatives] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, totalPages: 1 });
-  const [currentPage, setCurrentPage] = useState(1);
 
   // Filter Drawer State
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -33,11 +30,14 @@ const Winners = () => {
   // Modal State
   const [selectedCreativeId, setSelectedCreativeId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchWinners = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const isCustomAndIncomplete = datePreset === 'custom' && (!customRange.since || !customRange.until);
+
+  // Fetch winning creatives via React Query
+  const { data: creativeResponse, isLoading: loading, error: queryError, refetch: fetchWinners } = useQuery({
+    queryKey: ['winners', { datePreset, customRange, refreshTrigger, globalSearch, activeFilters, currentPage }],
+    queryFn: async () => {
       let params = {
         preset: datePreset,
         page: currentPage,
@@ -58,26 +58,18 @@ const Winners = () => {
       });
 
       const response = await axios.get('http://localhost:5000/api/creatives', { params });
-      const allCreatives = response.data.data || [];
-      // Filter for top performers (Excellent, Great, Good)
-      const filtered = allCreatives.filter(c => 
-        ['Excellent', 'Great', 'Good'].includes(c.performanceBadge)
-      );
-      setCreatives(filtered);
-      setPagination(response.data.pagination || { page: 1, limit: 12, total: 0, totalPages: 1 });
-    } catch (err) {
-      setError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [datePreset, customRange, refreshTrigger, globalSearch, activeFilters, currentPage]);
+      return response.data;
+    },
+    enabled: !isCustomAndIncomplete
+  });
 
-  useEffect(() => {
-    if (datePreset === 'custom' && (!customRange.since || !customRange.until)) {
-      return;
-    }
-    fetchWinners();
-  }, [fetchWinners, datePreset, customRange]);
+  const allCreatives = creativeResponse?.data || [];
+  // Filter for top performers (Excellent, Great, Good)
+  const creatives = allCreatives.filter(c => 
+    ['Excellent', 'Great', 'Good'].includes(c.performanceBadge)
+  );
+  const pagination = creativeResponse?.pagination || { page: 1, limit: 12, total: 0, totalPages: 1 };
+  const error = queryError ? getFriendlyErrorMessage(queryError) : null;
 
   const handleFilterChange = (id, value) => {
     setActiveFilters(prev => ({
@@ -284,23 +276,27 @@ const Winners = () => {
       )}
 
       {/* Filter Drawer */}
-      <FilterDrawer
-        isOpen={isFilterOpen}
-        onClose={() => setIsFilterOpen(false)}
-        filtersConfig={filtersConfig}
-        activeFilters={activeFilters}
-        onFilterChange={handleFilterChange}
-        onReset={handleResetFilters}
-      />
+      <React.Suspense fallback={null}>
+        <FilterDrawer
+          isOpen={isFilterOpen}
+          onClose={() => setIsFilterOpen(false)}
+          filtersConfig={filtersConfig}
+          activeFilters={activeFilters}
+          onFilterChange={handleFilterChange}
+          onReset={handleResetFilters}
+        />
+      </React.Suspense>
 
       {/* Details Modal */}
-      <CreativeDetailsModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        creativeId={selectedCreativeId}
-        datePreset={datePreset}
-        customRange={customRange}
-      />
+      <React.Suspense fallback={null}>
+        <CreativeDetailsModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          creativeId={selectedCreativeId}
+          datePreset={datePreset}
+          customRange={customRange}
+        />
+      </React.Suspense>
     </div>
   );
 };

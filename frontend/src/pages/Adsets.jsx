@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, Layers, Search } from 'lucide-react';
@@ -8,57 +9,50 @@ import { getFriendlyErrorMessage } from '../utils/errorHandler';
 
 const Adsets = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [adsets, setAdsets] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchAdsets = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const isCustomAndIncomplete = datePreset === 'custom' && (!customRange.since || !customRange.until);
+
+  // Fetch creatives list from backend to compile adsets map via React Query
+  const { data: creativeResponse, isLoading: loading, error: queryError, refetch: fetchAdsets } = useQuery({
+    queryKey: ['creatives-adsets', { datePreset, customRange, refreshTrigger }],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/creatives?preset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
-
       const response = await axios.get(url);
-      const creatives = response.data.data || [];
+      return response.data;
+    },
+    enabled: !isCustomAndIncomplete
+  });
 
-      // Compile unique Ad Sets map
-      const adsetsMap = {};
+  const error = queryError ? getFriendlyErrorMessage(queryError) : null;
+  const creatives = creativeResponse?.data || [];
 
-      creatives.forEach(creative => {
-        creative.ads.forEach(ad => {
-          const adsetId = ad.adsetId || 'unknown';
-          const adsetName = ad.adsetName || 'Unnamed Ad Set';
+  // Compile unique Ad Sets map
+  const adsets = React.useMemo(() => {
+    const adsetsMap = {};
 
-          if (!adsetsMap[adsetId]) {
-            adsetsMap[adsetId] = {
-              id: adsetId,
-              name: adsetName,
-              campaignName: ad.campaignName,
-              campaignId: ad.campaignId,
-              status: ad.adStatus || 'ACTIVE'
-            };
-          }
-        });
+    creatives.forEach(creative => {
+      creative.ads.forEach(ad => {
+        const adsetId = ad.adsetId || 'unknown';
+        const adsetName = ad.adsetName || 'Unnamed Ad Set';
+
+        if (!adsetsMap[adsetId]) {
+          adsetsMap[adsetId] = {
+            id: adsetId,
+            name: adsetName,
+            campaignName: ad.campaignName,
+            campaignId: ad.campaignId,
+            status: ad.adStatus || 'ACTIVE'
+          };
+        }
       });
+    });
 
-      setAdsets(Object.values(adsetsMap));
-    } catch (err) {
-      setError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [datePreset, customRange, refreshTrigger]);
-
-  useEffect(() => {
-    if (datePreset === 'custom' && (!customRange.since || !customRange.until)) {
-      return;
-    }
-    fetchAdsets();
-  }, [fetchAdsets, datePreset, customRange]);
+    return Object.values(adsetsMap);
+  }, [creatives]);
 
   const filteredAdsets = adsets.filter(a => 
     a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 

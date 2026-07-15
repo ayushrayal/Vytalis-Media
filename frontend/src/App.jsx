@@ -23,7 +23,7 @@ import AIInsights from './pages/AIInsights';
 import CreativeDetails from './pages/CreativeDetails';
 import Profile from './pages/Profile';
 import Signup from './pages/Signup';
-import DebugPanel from './components/DebugPanel';
+const DebugPanel = React.lazy(() => import('./components/DebugPanel'));
 
 // Wrapper component to inject DashboardContext state into DashboardLayout
 const LayoutWrapper = ({ children }) => {
@@ -172,7 +172,11 @@ const App = () => {
                 </ProtectedRoute>
               } />
             </Routes>
-            {import.meta.env.DEV && <DebugPanel />}
+            {import.meta.env.DEV && (
+              <React.Suspense fallback={null}>
+                <DebugPanel />
+              </React.Suspense>
+            )}
           </Router>
         </DashboardProvider>
       </AuthProvider>

@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { X, TrendingUp, TrendingDown, Info, Calculator, Calendar } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Shimmer } from './LoadingSkeleton';
 import MetricTrendChart from './MetricTrendChart';
 import { formatCurrency } from '../utils/formatter';
-
-// Session-level global trend cache
-const trendCache = {};
 
 const MetricDetailsModal = ({
   isOpen,
@@ -21,51 +19,31 @@ const MetricDetailsModal = ({
   isPercent = false,
   startDateStr
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [trendData, setTrendData] = useState([]);
-  const [error, setError] = useState(null);
   const [granularity, setGranularity] = useState('daily'); // 'daily' or 'monthly'
 
-  // Fetch or retrieve trend data from cache
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let firstDay = '';
-    try {
-      const d = new Date(startDateStr || Date.now());
-      firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-    } catch (e) {
-      const d = new Date();
-      firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-    }
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const cacheKey = `${firstDay}_${todayStr}`;
-
-    if (trendCache[cacheKey]) {
-      setTrendData(trendCache[cacheKey]);
-      setLoading(false);
-      return;
-    }
-
-    const fetchTrendData = async () => {
-      setLoading(true);
-      setError(null);
+  // Fetch trend data via React Query when open
+  const { data: trendDataRaw, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['dashboardTrendsModal', startDateStr],
+    queryFn: async () => {
+      let firstDay = '';
       try {
-        const url = `http://localhost:5000/api/dashboard/trends?preset=custom&since=${firstDay}&until=${todayStr}`;
-        const response = await axios.get(url);
-        const data = response.data.data || [];
-        trendCache[cacheKey] = data;
-        setTrendData(data);
-      } catch (err) {
-        setError('Failed to fetch trend timelines for the selected month.');
-      } finally {
-        setLoading(false);
+        const d = new Date(startDateStr || Date.now());
+        firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      } catch (e) {
+        const d = new Date();
+        firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
       }
-    };
+      const todayStr = new Date().toISOString().split('T')[0];
+      const url = `http://localhost:5000/api/dashboard/trends?preset=custom&since=${firstDay}&until=${todayStr}`;
+      const response = await axios.get(url);
+      return response.data.data || [];
+    },
+    enabled: !!isOpen && !!startDateStr,
+    staleTime: 5 * 60 * 1000
+  });
 
-    fetchTrendData();
-  }, [isOpen, startDateStr]);
+  const trendData = trendDataRaw || [];
+  const error = queryError ? 'Failed to fetch trend timelines.' : null;
 
   if (!isOpen) return null;
 

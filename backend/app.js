@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import compression from 'compression';
 import ErrorService from './services/errorService.js';
 import requestTracer from './middlewares/requestTracer.js';
 import perfMonitoring from './middlewares/perfMonitoring.js';
@@ -16,6 +17,9 @@ import aiRouter from './routes/ai.js';
 import debugRouter from './routes/debug.js';
 
 const app = express();
+
+// Enable Gzip Compression
+app.use(compression());
 
 // Security Middlewares
 app.use(helmet());

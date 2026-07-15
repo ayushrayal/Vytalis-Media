@@ -300,7 +300,8 @@ class CampaignController {
         // 1. Fetch Metadata
         let campaignMeta = {};
         try {
-          campaignMeta = await CampaignService.getCampaignById(user, campaignId);
+          const baseData = await CampaignService.getCampaignBaseData(user, campaignId);
+          campaignMeta = baseData.campaign;
         } catch (err) {
           errors.campaign = `Failed to load campaign metadata: ${err.message}`;
         }
@@ -481,7 +482,8 @@ class CampaignController {
       const result = await CacheService.getOrFetch(cacheKey, async () => {
         let creatives = [];
         try {
-          const allSalesCreatives = await CreativeService.getSalesCreatives(user);
+          const baseData = await CampaignService.getCampaignBaseData(user, campaignId);
+          const campaignCreatives = baseData.creatives;
           
           const adResponse = await MetaService.get(`${campaignId}/insights`, user, {
             level: 'ad',
@@ -492,10 +494,6 @@ class CampaignController {
           
           const adInsights = adResponse.data || [];
           const adInsightMap = new Map(adInsights.map(item => [item.ad_id, item]));
-
-          const campaignCreatives = allSalesCreatives.filter(c =>
-            c.ads.some(ad => ad.campaignId === campaignId)
-          );
 
           creatives = campaignCreatives.map(c => {
             const campaignAds = c.ads.filter(ad => ad.campaignId === campaignId);

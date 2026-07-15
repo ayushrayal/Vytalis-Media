@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../context/DashboardContext';
 import { TableSkeleton } from '../components/LoadingSkeleton';
 import {
@@ -7,55 +8,44 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import DebouncedInput from '../components/debouncedInput';
-import CampaignDetailsDrawer from '../components/CampaignDetailsDrawer';
 import SectionError from '../components/SectionError';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatter';
 
+const CampaignDetailsDrawer = React.lazy(() => import('../components/CampaignDetailsDrawer'));
+
 const Campaigns = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [campaigns, setCampaigns] = useState([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [sort, setSort] = useState('spend');
   const [order, setOrder] = useState('desc');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
 
   // Drawer state
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
 
-  const fetchCampaigns = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const isCustomAndIncomplete = datePreset === 'custom' && (!customRange.since || !customRange.until);
+
+  const { data: campaignResponse, isLoading: loading, error: queryError, refetch: fetchCampaigns } = useQuery({
+    queryKey: ['campaigns', { page, limit, search, status, sort, order, datePreset, customRange, refreshTrigger }],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/campaigns?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${status}&sort=${sort}&order=${order}&datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
-
       const response = await axios.get(url);
-      setCampaigns(response.data.data || []);
-      const pag = response.data.pagination || {};
-      setTotal(pag.total || 0);
-      setTotalPages(pag.totalPages || 1);
-    } catch (err) {
-      setError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, limit, search, status, sort, order, datePreset, customRange, refreshTrigger]);
+      return response.data;
+    },
+    enabled: !isCustomAndIncomplete
+  });
 
-  useEffect(() => {
-    if (datePreset === 'custom' && (!customRange.since || !customRange.until)) {
-      return;
-    }
-    fetchCampaigns();
-  }, [fetchCampaigns, datePreset, customRange]);
+  const campaigns = campaignResponse?.data || [];
+  const pagination = campaignResponse?.pagination || {};
+  const total = pagination.total || 0;
+  const totalPages = pagination.totalPages || 1;
+  const error = queryError ? getFriendlyErrorMessage(queryError) : null;
 
   // Reset page when search or status filters change
   useEffect(() => {
@@ -380,13 +370,15 @@ const Campaigns = () => {
       )}
 
       {/* Campaign Details slide-over drawer */}
-      <CampaignDetailsDrawer
-        isOpen={!!selectedCampaignId}
-        onClose={() => setSelectedCampaignId(null)}
-        campaignId={selectedCampaignId}
-        datePreset={datePreset}
-        customRange={customRange}
-      />
+      <React.Suspense fallback={null}>
+        <CampaignDetailsDrawer
+          isOpen={!!selectedCampaignId}
+          onClose={() => setSelectedCampaignId(null)}
+          campaignId={selectedCampaignId}
+          datePreset={datePreset}
+          customRange={customRange}
+        />
+      </React.Suspense>
 
       <style>{`
         .table-row-hover:hover {

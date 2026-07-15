@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import {
   X, Info, Calendar, TrendingUp, Sparkles, Award, BarChart2,
   Users, Layers, Clock, AlertTriangle, Play, Pause, AlertCircle, ChevronDown, ChevronUp, CheckCircle, Lightbulb
@@ -15,128 +16,133 @@ import {
 } from 'recharts';
 
 const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, customRange }) => {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [breakdownTab, setBreakdownTab] = useState('age');
   const [chartMetric, setChartMetric] = useState('spend');
   const [expandedAdSet, setExpandedAdSet] = useState(null); // ID of expanded adset
 
-  // Lazy tab data cache
-  const [tabData, setTabData] = useState({
-    trends: null,
-    creatives: null,
-    breakdowns: null,
-    adsets: null,
-    recommendations: null
-  });
+  // Reset tab selection when drawer opens/closes or campaign changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('overview');
+    }
+  }, [isOpen, campaignId]);
 
-  const [tabLoading, setTabLoading] = useState({
-    trends: false,
-    creatives: false,
-    breakdowns: false,
-    adsets: false,
-    recommendations: false
-  });
-
-  const [tabError, setTabError] = useState({
-    trends: null,
-    creatives: null,
-    breakdowns: null,
-    adsets: null,
-    recommendations: null
-  });
-
-  // 1. Initial overview data fetch (Memoized Callback)
-  const fetchDetails = useCallback(async () => {
-    if (!campaignId) return;
-    setLoading(true);
-    setError(null);
-    try {
+  // 1. Initial overview data fetch via React Query
+  const { data, isLoading: loading, error: queryError, refetch: fetchDetails } = useQuery({
+    queryKey: ['campaignDetails', campaignId, datePreset, customRange],
+    queryFn: async () => {
       let url = `http://localhost:5000/api/campaigns/${campaignId}?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
       const response = await axios.get(url);
-      setData(response.data.data);
-    } catch (err) {
-      setError(getFriendlyErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [campaignId, datePreset, customRange]);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!campaignId,
+    staleTime: 5 * 60 * 1000
+  });
 
-  useEffect(() => {
-    if (!isOpen || !campaignId) return;
+  const error = queryError ? getFriendlyErrorMessage(queryError) : null;
 
-    // Reset tab cache
-    setTabData({
-      trends: null,
-      creatives: null,
-      breakdowns: null,
-      adsets: null,
-      recommendations: null
-    });
-    setTabLoading({
-      trends: false,
-      creatives: false,
-      breakdowns: false,
-      adsets: false,
-      recommendations: false
-    });
-    setTabError({
-      trends: null,
-      creatives: null,
-      breakdowns: null,
-      adsets: null,
-      recommendations: null
-    });
-    setActiveTab('overview');
-
-    fetchDetails();
-  }, [isOpen, campaignId, fetchDetails]);
-
-  // 2. Lazy load specific tab data on-demand (Memoized Callback)
-  const fetchTab = useCallback(async (tabName, endpoint, force = false) => {
-    if (!campaignId) return;
-    if (!force && (tabData[tabName] || tabLoading[tabName])) return;
-
-    setTabLoading(prev => ({ ...prev, [tabName]: true }));
-    setTabError(prev => ({ ...prev, [tabName]: null }));
-
-    try {
-      let url = `http://localhost:5000/api/campaigns/${campaignId}/${endpoint}?datePreset=${datePreset}`;
+  // 2. Trends query (performance or timeline or overview for metrics summary computations)
+  const { data: trendsData, isLoading: trendsLoading, error: trendsError, refetch: refetchTrends } = useQuery({
+    queryKey: ['campaignTrends', campaignId, datePreset, customRange],
+    queryFn: async () => {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}/trends?datePreset=${datePreset}`;
       if (datePreset === 'custom' && customRange?.since && customRange?.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
       const response = await axios.get(url);
-      setTabData(prev => ({ ...prev, [tabName]: response.data.data }));
-    } catch (err) {
-      setTabError(prev => ({
-        ...prev,
-        [tabName]: getFriendlyErrorMessage(err)
-      }));
-    } finally {
-      setTabLoading(prev => ({ ...prev, [tabName]: false }));
-    }
-  }, [campaignId, datePreset, customRange, tabData, tabLoading]);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!campaignId && !!data && (activeTab === 'performance' || activeTab === 'timeline' || activeTab === 'overview'),
+    staleTime: 5 * 60 * 1000
+  });
 
-  useEffect(() => {
-    if (!isOpen || !campaignId || !data) return;
+  // 3. Adsets query
+  const { data: adsetData, isLoading: adsetsLoading, error: adsetsError, refetch: refetchAdsets } = useQuery({
+    queryKey: ['campaignAdsets', campaignId, datePreset, customRange],
+    queryFn: async () => {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}/adsets?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!campaignId && !!data && activeTab === 'adsets',
+    staleTime: 5 * 60 * 1000
+  });
 
-    if (activeTab === 'performance' || activeTab === 'timeline') {
-      fetchTab('trends', 'trends');
-    } else if (activeTab === 'adsets') {
-      fetchTab('adsets', 'adsets');
-    } else if (activeTab === 'creatives') {
-      fetchTab('creatives', 'creatives');
-    } else if (activeTab === 'breakdowns') {
-      fetchTab('breakdowns', 'breakdowns');
-    } else if (activeTab === 'recommendations') {
-      fetchTab('recommendations', 'recommendations');
-    }
-  }, [isOpen, campaignId, datePreset, customRange, activeTab, data, fetchTab]);
+  // 4. Creatives query
+  const { data: creativesData, isLoading: creativesLoading, error: creativesError, refetch: refetchCreatives } = useQuery({
+    queryKey: ['campaignCreatives', campaignId, datePreset, customRange],
+    queryFn: async () => {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}/creatives?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!campaignId && !!data && (activeTab === 'creatives' || activeTab === 'overview'),
+    staleTime: 5 * 60 * 1000
+  });
+
+  // 5. Breakdowns query
+  const { data: breakdownsData, isLoading: breakdownsLoading, error: breakdownsError, refetch: refetchBreakdowns } = useQuery({
+    queryKey: ['campaignBreakdowns', campaignId, datePreset, customRange],
+    queryFn: async () => {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}/breakdowns?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!campaignId && !!data && (activeTab === 'breakdowns' || activeTab === 'overview'),
+    staleTime: 5 * 60 * 1000
+  });
+
+  // 6. Recommendations query
+  const { data: recommendationsData, isLoading: recommendationsLoading, error: recommendationsError, refetch: refetchRecommendations } = useQuery({
+    queryKey: ['campaignRecommendations', campaignId, datePreset, customRange],
+    queryFn: async () => {
+      let url = `http://localhost:5000/api/campaigns/${campaignId}/recommendations?datePreset=${datePreset}`;
+      if (datePreset === 'custom' && customRange?.since && customRange?.until) {
+        url += `&since=${customRange.since}&until=${customRange.until}`;
+      }
+      const response = await axios.get(url);
+      return response.data.data;
+    },
+    enabled: !!isOpen && !!campaignId && !!data && activeTab === 'recommendations',
+    staleTime: 5 * 60 * 1000
+  });
+
+  const tabData = {
+    trends: trendsData || null,
+    creatives: creativesData || null,
+    breakdowns: breakdownsData || null,
+    adsets: adsetData || null,
+    recommendations: recommendationsData || null
+  };
+
+  const tabLoading = {
+    trends: trendsLoading,
+    creatives: creativesLoading,
+    breakdowns: breakdownsLoading,
+    adsets: adsetsLoading,
+    recommendations: recommendationsLoading
+  };
+
+  const tabError = {
+    trends: trendsError ? getFriendlyErrorMessage(trendsError) : null,
+    creatives: creativesError ? getFriendlyErrorMessage(creativesError) : null,
+    breakdowns: breakdownsError ? getFriendlyErrorMessage(breakdownsError) : null,
+    adsets: adsetsError ? getFriendlyErrorMessage(adsetsError) : null,
+    recommendations: recommendationsError ? getFriendlyErrorMessage(recommendationsError) : null
+  };
 
   if (!isOpen) return null;
 
@@ -463,7 +469,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   ) : tabError.trends ? (
                     <SectionError
                       message={tabError.trends}
-                      onRetry={() => fetchTab('trends', 'trends', true)}
+                      onRetry={refetchTrends}
                       isRetrying={tabLoading.trends}
                     />
                   ) : tabData.trends?.length > 0 ? (
@@ -507,7 +513,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   ) : tabError.adsets ? (
                     <SectionError
                       message={tabError.adsets}
-                      onRetry={() => fetchTab('adsets', 'adsets', true)}
+                      onRetry={refetchAdsets}
                       isRetrying={tabLoading.adsets}
                     />
                   ) : tabData.adsets?.length > 0 ? (
@@ -616,7 +622,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   ) : tabError.creatives ? (
                     <SectionError
                       message={tabError.creatives}
-                      onRetry={() => fetchTab('creatives', 'creatives', true)}
+                      onRetry={refetchCreatives}
                       isRetrying={tabLoading.creatives}
                     />
                   ) : tabData.creatives?.length > 0 ? (
@@ -693,7 +699,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   ) : tabError.breakdowns ? (
                     <SectionError
                       message={tabError.breakdowns}
-                      onRetry={() => fetchTab('breakdowns', 'breakdowns', true)}
+                      onRetry={refetchBreakdowns}
                       isRetrying={tabLoading.breakdowns}
                     />
                   ) : (
@@ -743,7 +749,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   ) : tabError.trends ? (
                     <SectionError
                       message={tabError.trends}
-                      onRetry={() => fetchTab('trends', 'trends', true)}
+                      onRetry={refetchTrends}
                       isRetrying={tabLoading.trends}
                     />
                   ) : tabData.trends?.length > 0 ? (
@@ -772,7 +778,7 @@ const CampaignDetailsDrawer = ({ isOpen, onClose, campaignId, datePreset, custom
                   ) : tabError.recommendations ? (
                     <SectionError
                       message={tabError.recommendations}
-                      onRetry={() => fetchTab('recommendations', 'recommendations', true)}
+                      onRetry={refetchRecommendations}
                       isRetrying={tabLoading.recommendations}
                     />
                   ) : tabData.recommendations?.length > 0 ? (
