@@ -3,12 +3,14 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import ErrorService from './services/errorService.js';
 import requestTracer from './middlewares/requestTracer.js';
 import perfMonitoring from './middlewares/perfMonitoring.js';
 
-// Import routers
-
+// Routers
 import authRouter from './routes/auth.js';
 import dashboardRouter from './routes/dashboard.js';
 import campaignRouter from './routes/campaigns.js';
@@ -18,57 +20,65 @@ import debugRouter from './routes/debug.js';
 
 const app = express();
 
-// Enable Gzip Compression
+// Required for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Compression
 app.use(compression());
 
-// Security Middlewares
-app.use(helmet());
-app.use(cors({
-  origin: '*', // For development flexibility; restrict in production
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// Security
+app.use(
+  cors({
+    origin: [
+      'http://localhost:5173',
+      process.env.FRONTEND_URL,
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
-// Request Logging
+app.use(helmet());
 app.use(morgan('dev'));
 
-// Request Tracer Middleware
-app.use(requestTracer);
+// Serve React Build
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Performance Monitoring Middleware
+// Middlewares
+app.use(requestTracer);
 app.use(perfMonitoring);
 
-
-// Response Interceptor to inject requestId into JSON response meta
 app.use((req, res, next) => {
   const originalJson = res.json;
+
   res.json = function (body) {
     if (body && typeof body === 'object' && !Array.isArray(body)) {
-      if (!body.meta) {
-        body.meta = {};
-      }
+      body.meta = body.meta || {};
       body.meta.requestId = req.requestId;
     }
+
     return originalJson.call(this, body);
   };
+
   next();
 });
 
-// Body parsing
+// Body Parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check route
+// Health Route
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
     version: process.env.APP_VERSION || '1.0.0',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Routes
+// API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/campaigns', campaignRouter);
@@ -79,7 +89,12 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/debug', debugRouter);
 }
 
-// Centralized Error Handling Middleware
+// IMPORTANT: Keep this AFTER all API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Error Handler
 app.use(ErrorService.handleExpressError);
 
 export default app;
