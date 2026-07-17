@@ -20,6 +20,7 @@ import aiRouter from './routes/ai.js';
 import userRouter from './routes/user.js';
 import shopifyRouter from './routes/shopify.js';
 import debugRouter from './routes/debug.js';
+import ShopifyController from './controllers/shopifyController.js';
 
 const app = express();
 
@@ -81,6 +82,10 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Global OAuth Callback Route Aliases
+app.get('/auth/callback', ShopifyController.callback);
+app.get('/auth/shopify/callback', ShopifyController.callback);
 
 // API Routes
 app.use('/api/auth', authRouter);
