@@ -68,25 +68,36 @@ class ShopifyService {
       throw err;
     }
 
-    const normalizedDomain = ShopifyClient.normalizeDomain(storeDomain);
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
-    const redirectUri = process.env.SHOPIFY_REDIRECT_URI;
+    const normalizedShop = ShopifyClient.normalizeDomain(storeDomain);
+    const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
+    const SHOPIFY_REDIRECT_URI = process.env.SHOPIFY_REDIRECT_URI;
 
-    if (!clientId || !redirectUri) {
+    if (!SHOPIFY_CLIENT_ID || !SHOPIFY_REDIRECT_URI) {
       const err = new Error('Shopify OAuth credentials (SHOPIFY_CLIENT_ID, SHOPIFY_REDIRECT_URI) are not configured.');
       err.status = 500;
       err.errorType = 'INTERNAL_SERVER_ERROR';
       throw err;
     }
 
-    const scopes = SHOPIFY_SCOPES;
     const state = ShopifyOAuth.generateOAuthState(userId);
 
-    const authUrl = `https://${normalizedDomain}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+    const authUrl =
+      `https://${normalizedShop}/admin/oauth/authorize` +
+      `?client_id=${SHOPIFY_CLIENT_ID}` +
+      `&scope=${SHOPIFY_SCOPES}` +
+      `&redirect_uri=${encodeURIComponent(SHOPIFY_REDIRECT_URI)}` +
+      `&state=${state}` +
+      `&response_type=code`;
+
+    console.log({
+      normalizedShop,
+      redirectUri: SHOPIFY_REDIRECT_URI,
+      authUrl
+    });
 
     return {
       authUrl,
-      storeDomain: normalizedDomain
+      storeDomain: normalizedShop
     };
   }
 
