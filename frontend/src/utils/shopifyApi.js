@@ -11,6 +11,16 @@ export const getShopifyStatus = async () => {
 };
 
 /**
+ * Initiate Shopify OAuth Install flow by fetching authorization redirect URL.
+ */
+export const fetchShopifyInstallUrl = async (storeDomain) => {
+  const response = await axios.get(`${API_URL}/api/shopify/install`, {
+    params: { shop: storeDomain }
+  });
+  return response.data?.data?.redirectUrl || response.data?.redirectUrl;
+};
+
+/**
  * Connect or reconnect a Shopify store.
  */
 export const connectShopify = async ({ storeDomain, accessToken, scopes }) => {

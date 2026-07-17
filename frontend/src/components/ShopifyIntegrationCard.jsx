@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useShopifyStatus, useDisconnectShopify } from '../utils/shopifyApi';
+import { useShopifyStatus, useDisconnectShopify, fetchShopifyInstallUrl } from '../utils/shopifyApi';
 import { ShoppingBag, CheckCircle2, AlertCircle, RefreshCw, Unplug, Loader2, Calendar, Globe, Clock, ArrowRight } from 'lucide-react';
 
 const ShopifyIntegrationCard = () => {
@@ -29,7 +29,23 @@ const ShopifyIntegrationCard = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  const handleConnect = (e) => {
+  /**
+   * Normalize domain string consistently across UI inputs.
+   * e.g. "https://threadnbutton.myshopify.com/" -> "threadnbutton.myshopify.com"
+   * e.g. "threadnbutton" -> "threadnbutton.myshopify.com"
+   */
+  const normalizeDomainInput = (rawInput) => {
+    if (!rawInput || typeof rawInput !== 'string') return '';
+    let cleaned = rawInput.trim().toLowerCase();
+    cleaned = cleaned.replace(/^https?:\/\//i, '');
+    cleaned = cleaned.split('/')[0].trim();
+    if (cleaned && !cleaned.endsWith('.myshopify.com')) {
+      cleaned = `${cleaned.replace(/\.+$/, '')}.myshopify.com`;
+    }
+    return cleaned;
+  };
+
+  const handleConnect = async (e) => {
     e.preventDefault();
     setFormError(null);
     setSuccessMsg(null);
@@ -39,12 +55,30 @@ const ShopifyIntegrationCard = () => {
       return;
     }
 
+    const cleanDomain = normalizeDomainInput(storeDomain);
+    if (!cleanDomain) {
+      setFormError('Invalid Shopify Store Domain format.');
+      return;
+    }
+
     setIsRedirecting(true);
-    const cleanDomain = storeDomain.trim().toLowerCase().replace(/^https?:\/\//i, '').split('/')[0];
-    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-    
-    // Redirect browser to backend install route to initiate Shopify OAuth
-    window.location.href = `${backendUrl}/shopify/install?shop=${encodeURIComponent(cleanDomain)}`;
+
+    try {
+      // Execute authenticated API call to obtain OAuth redirect URL
+      const redirectUrl = await fetchShopifyInstallUrl(cleanDomain);
+
+      // Safety check: verify redirect URL exists before window navigation
+      if (!redirectUrl || typeof redirectUrl !== 'string') {
+        throw new Error('Missing Shopify OAuth authorization redirect URL.');
+      }
+
+      // Execute window redirect to Shopify OAuth grant screen
+      window.location.href = redirectUrl;
+    } catch (err) {
+      setIsRedirecting(false);
+      const msg = err.response?.data?.message || err.message || 'Failed to initiate Shopify OAuth connection.';
+      setFormError(msg);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -313,7 +347,7 @@ const ShopifyIntegrationCard = () => {
               style={{ opacity: isRedirecting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
               {isRedirecting ? <Loader2 size={16} className="spin" /> : <ArrowRight size={16} />}
-              <span>{isRedirecting ? 'Redirecting to Shopify...' : 'Connect Shopify'}</span>
+              <span>{isRedirecting ? 'Connecting to Shopify...' : 'Connect Shopify'}</span>
             </button>
 
             {isReconnecting && (

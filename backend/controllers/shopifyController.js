@@ -33,12 +33,23 @@ class ShopifyController {
 
   /**
    * GET /api/shopify/install?shop=domain
+   * Returns OAuth authorization URL in JSON contract so frontend can execute authenticated window redirect.
    */
   static async install(req, res, next) {
     try {
       const shop = req.query.shop;
       const { authUrl } = ShopifyService.generateAuthUrl(shop, req.user._id);
-      return res.redirect(authUrl);
+
+      return res.status(200).json({
+        success: true,
+        message: 'OAuth authorization URL generated successfully.',
+        data: {
+          redirectUrl: authUrl
+        },
+        meta: {
+          timestamp: new Date().toISOString()
+        }
+      });
     } catch (error) {
       ShopifyController.handleError(res, error, 'GET /api/shopify/install');
     }
