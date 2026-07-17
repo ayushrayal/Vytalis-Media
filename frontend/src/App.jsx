@@ -23,6 +23,8 @@ import AIInsights from './pages/AIInsights';
 import CreativeDetails from './pages/CreativeDetails';
 import Profile from './pages/Profile';
 import Signup from './pages/Signup';
+const ShopifyDashboard = React.lazy(() => import('./pages/ShopifyDashboard'));
+const CombinedAnalytics = React.lazy(() => import('./pages/CombinedAnalytics'));
 const DebugPanel = React.lazy(() => import('./components/DebugPanel'));
 
 // Wrapper component to inject DashboardContext state into DashboardLayout
@@ -64,6 +66,26 @@ const App = () => {
                 <ProtectedRoute>
                   <LayoutWrapper>
                     <Dashboard />
+                  </LayoutWrapper>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/dashboard/shopify" element={
+                <ProtectedRoute>
+                  <LayoutWrapper>
+                    <React.Suspense fallback={<div className="p-4 text-center">Loading Shopify Analytics...</div>}>
+                      <ShopifyDashboard />
+                    </React.Suspense>
+                  </LayoutWrapper>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/dashboard/combined" element={
+                <ProtectedRoute>
+                  <LayoutWrapper>
+                    <React.Suspense fallback={<div className="p-4 text-center">Loading Combined Analytics...</div>}>
+                      <CombinedAnalytics />
+                    </React.Suspense>
                   </LayoutWrapper>
                 </ProtectedRoute>
               } />

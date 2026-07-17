@@ -53,8 +53,8 @@ export const AuthProvider = ({ children }) => {
           });
         }
         
-        // If 401 unauthorized from our own backend, log out user
-        if (error.response?.status === 401) {
+        // ONLY log out user if HTTP 401 is specifically a backend JWT authentication failure
+        if (error.response?.status === 401 && errorData?.errorType === 'UNAUTHORIZED') {
           logout(false);
         }
 

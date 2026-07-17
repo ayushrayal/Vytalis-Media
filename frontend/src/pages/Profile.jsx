@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { API_URL } from '../config/api';
 import { User, Mail, Shield, Key, Eye, EyeOff, Save, CheckCircle, AlertTriangle } from 'lucide-react';
+import ShopifyIntegrationCard from '../components/ShopifyIntegrationCard';
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
@@ -328,6 +329,18 @@ const Profile = () => {
           <span>{loading ? 'Saving...' : 'Save Settings'}</span>
         </button>
       </form>
+
+      {/* Integrations Section */}
+      <div style={{ marginTop: '3rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Integrations</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            Manage third-party platform credentials and connections
+          </p>
+        </div>
+
+        <ShopifyIntegrationCard />
+      </div>
     </div>
   );
 };

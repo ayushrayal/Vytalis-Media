@@ -24,7 +24,8 @@ import {
   RefreshCw,
   Menu,
   X,
-  AlertCircle
+  AlertCircle,
+  ShoppingBag
 } from 'lucide-react';
 import DateRangeSelector from '../components/DateRangeSelector';
 
@@ -70,6 +71,8 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Shopify Analytics', path: '/dashboard/shopify', icon: ShoppingBag },
+    { name: 'Combined Analytics', path: '/dashboard/combined', icon: Layers, badge: 'Soon' },
     { name: 'Campaigns', path: '/campaigns', icon: Megaphone },
     { name: 'Ad Sets', path: '/adsets', icon: Layers },
     { name: 'Creative Gallery', path: '/creatives', icon: Image },
@@ -151,7 +154,7 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.75rem',
+                  justifyContent: 'space-between',
                   padding: '0.75rem 1rem',
                   borderRadius: 'var(--radius-sm)',
                   fontWeight: 500,
@@ -161,8 +164,16 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
                   transition: 'background var(--transition-fast), color var(--transition-fast)'
                 }}
               >
-                <Icon size={18} />
-                <span>{item.name}</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <Icon size={18} />
+                  <span>{item.name}</span>
+                </div>
+                {item.badge && (
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, padding: '0.15rem 0.45rem', borderRadius: '999px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: '1px solid #3b82f6' }}>
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}

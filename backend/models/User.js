@@ -57,6 +57,50 @@ const userSchema = new mongoose.Schema({
       type: [String],
       default: undefined
     }
+  },
+  shopify: {
+    connected: {
+      type: Boolean,
+      default: false
+    },
+    shopId: {
+      type: String,
+      default: null
+    },
+    storeDomain: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    accessToken: {
+      type: String,
+      default: null
+    },
+    shopName: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    currency: {
+      type: String,
+      default: null
+    },
+    timezone: {
+      type: String,
+      default: null
+    },
+    scopes: {
+      type: [String],
+      default: []
+    },
+    connectedAt: {
+      type: Date,
+      default: null
+    },
+    lastVerifiedAt: {
+      type: Date,
+      default: null
+    }
   }
 }, {
   timestamps: true
