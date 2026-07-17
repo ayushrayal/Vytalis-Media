@@ -262,7 +262,7 @@ const Profile = () => {
         {/* Meta Account ID */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            Meta Ad Account ID (e.g. 587440480534010)
+            Meta Ad Account ID 
           </label>
           <div style={{
             display: 'flex',

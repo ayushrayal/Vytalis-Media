@@ -1,5 +1,7 @@
 import UserRepository from '../repositories/userRepository.js';
 import encryption from '../utils/encryption.js';
+import CacheService from './cacheService.js';
+import MetaService from './metaService.js';
 
 class UserService {
   /**
@@ -38,12 +40,32 @@ class UserService {
       user.metaAccessToken = encryption.encrypt(updatedFields.metaAccessToken);
     }
 
+    if (updatedFields.metaAccountName !== undefined) {
+      user.metaAccountName = updatedFields.metaAccountName;
+    }
+
     // Set new password (Mongoose pre-save hook will hash it)
     if (updatedFields.password !== undefined) {
       user.password = updatedFields.password;
     }
 
+    // Fetch and persist fresh Meta Ad Account Name if Meta details exist or were modified
+    if (user.metaAccountId && user.metaAccessToken) {
+      try {
+        const accountInfo = await MetaService.getAccountName(user);
+        if (accountInfo?.name && accountInfo.name.trim()) {
+          user.metaAccountName = accountInfo.name.trim();
+        }
+      } catch (err) {
+        // Ignore fetch error
+      }
+    }
+
     await UserRepository.save(user);
+
+    // Flush cache when user profile credentials or settings are updated
+    CacheService.flush();
+
     return user;
   }
 }

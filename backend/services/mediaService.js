@@ -130,7 +130,7 @@ class MediaService {
   static async enrichCreativeAssets(creatives, user, forceEnrich = false) {
     const startEnrichment = Date.now();
     if (process.env.NODE_ENV !== 'production') {
-      console.time("Enrichment");
+      CacheService.safeTime("Enrichment");
     }
 
     const tracker = {
@@ -426,7 +426,7 @@ class MediaService {
 
     const duration = Date.now() - startEnrichment;
     if (process.env.NODE_ENV !== 'production') {
-      console.timeEnd("Enrichment");
+      CacheService.safeTimeEnd("Enrichment");
       console.log(`[Enrichment Summary]
   Creatives Enriched:    ${creatives.length}
   Images Fetched:        ${tracker.imagesFetched}

@@ -1,5 +1,7 @@
 import AuthService from '../services/authService.js';
 import UserService from '../services/userService.js';
+import CreativeService from '../services/creativeService.js';
+import CacheService from '../services/cacheService.js';
 
 class AuthController {
   /**
@@ -19,6 +21,21 @@ class AuthController {
 
       const result = await AuthService.login(email, password);
       
+      // Cache warm-up immediately after successful login
+      const userDoc = await UserService.findUserByEmail(email);
+      if (userDoc) {
+        console.log('[CACHE WARMUP STARTED]');
+        setTimeout(async () => {
+          try {
+            await CreativeService.getSalesCreatives(userDoc, false);
+            console.log('[CACHE WARMUP COMPLETED]');
+            CacheService.logTelemetry();
+          } catch (err) {
+            console.warn('[CACHE WARMUP ERROR]', err.message);
+          }
+        }, 1000);
+      }
+
       res.status(200).json({
         success: true,
         message: 'Login successful.',
@@ -71,6 +88,7 @@ class AuthController {
         companyName: sanitizedUser.companyName,
         email: sanitizedUser.email,
         metaAccountId: sanitizedUser.metaAccountId,
+        metaAccountName: sanitizedUser.metaAccountName || '',
         role: sanitizedUser.role,
         isActive: sanitizedUser.isActive,
         lastLoginAt: sanitizedUser.lastLoginAt,
@@ -127,6 +145,7 @@ class AuthController {
         companyName: sanitized.companyName,
         email: sanitized.email,
         metaAccountId: sanitized.metaAccountId,
+        metaAccountName: sanitized.metaAccountName || '',
         role: sanitized.role,
         isActive: sanitized.isActive,
         lastLoginAt: sanitized.lastLoginAt,
