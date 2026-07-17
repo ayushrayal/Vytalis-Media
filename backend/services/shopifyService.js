@@ -86,8 +86,7 @@ class ShopifyService {
       `?client_id=${SHOPIFY_CLIENT_ID}` +
       `&scope=${SHOPIFY_SCOPES}` +
       `&redirect_uri=${encodeURIComponent(SHOPIFY_REDIRECT_URI)}` +
-      `&state=${state}` +
-      `&response_type=code`;
+      `&state=${state}`;
 
     console.log({
       normalizedShop,
