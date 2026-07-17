@@ -4,21 +4,30 @@ import Logger from '../utils/logger.js';
 
 class ShopifyController {
   /**
-   * Helper to format and log structured errors for Shopify endpoints.
+   * Helper to format production-safe errors and return standardized JSON contract.
    */
-  static handleError(res, error, endpoint) {
+  static handleError(res, error, endpointName) {
     const status = error.status && error.status !== 401 ? error.status : 400;
-    const errorType = error.errorType || (status === 429 ? 'RATE_LIMIT' : status >= 500 ? 'SHOPIFY_ERROR' : 'BAD_REQUEST');
+    const errorType = error.errorType || (status === 429 ? 'RATE_LIMIT' : status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'SHOPIFY_API_ERROR');
     const message = error.message || 'An error occurred during Shopify operation.';
+    const timestamp = new Date().toISOString();
 
-    if (process.env.NODE_ENV !== 'production') {
-      Logger.error(`[Shopify API Error] Endpoint: ${endpoint} | Status: ${status} | Error Type: ${errorType} | Message: ${message}`);
+    // Production-safe error logging: NEVER log tokens, passwords, keys, queries, or headers
+    if (process.env.NODE_ENV !== 'test') {
+      Logger.error(`[Shopify Error] Endpoint: ${endpointName}`, {
+        errorType,
+        status,
+        timestamp
+      });
     }
 
     return res.status(status).json({
       success: false,
       errorType,
-      message
+      message,
+      meta: {
+        timestamp
+      }
     });
   }
 
@@ -32,8 +41,11 @@ class ShopifyController {
       if (!storeDomain || !accessToken) {
         return res.status(400).json({
           success: false,
-          errorType: 'VALIDATION_ERROR',
-          message: 'Both storeDomain and accessToken are required.'
+          errorType: 'INVALID_DOMAIN',
+          message: 'Both storeDomain and accessToken are required.',
+          meta: {
+            timestamp: new Date().toISOString()
+          }
         });
       }
 
@@ -44,13 +56,16 @@ class ShopifyController {
         scopes
       );
 
-      // Clear cached analytics on reconnect
+      // Invalidate analytics caches on reconnect
       CacheService.delByPattern(`shopify_*:${req.user._id}:*`);
 
       res.status(200).json({
         success: true,
         message: 'Shopify store connected successfully.',
-        data: result
+        data: result,
+        meta: {
+          timestamp: new Date().toISOString()
+        }
       });
     } catch (error) {
       ShopifyController.handleError(res, error, 'POST /api/shopify/connect');
@@ -66,7 +81,11 @@ class ShopifyController {
 
       res.status(200).json({
         success: true,
-        data: result
+        message: 'Shopify connection status retrieved.',
+        data: result,
+        meta: {
+          timestamp: new Date().toISOString()
+        }
       });
     } catch (error) {
       ShopifyController.handleError(res, error, 'GET /api/shopify/status');
@@ -84,7 +103,10 @@ class ShopifyController {
       res.status(200).json({
         success: true,
         message: 'Shopify store disconnected successfully.',
-        data: result
+        data: result,
+        meta: {
+          timestamp: new Date().toISOString()
+        }
       });
     } catch (error) {
       ShopifyController.handleError(res, error, 'POST /api/shopify/disconnect');
@@ -100,7 +122,11 @@ class ShopifyController {
 
       res.status(200).json({
         success: true,
-        data: result
+        message: 'Shopify health status check completed.',
+        data: result,
+        meta: {
+          timestamp: new Date().toISOString()
+        }
       });
     } catch (error) {
       ShopifyController.handleError(res, error, 'GET /api/shopify/health');
@@ -128,15 +154,16 @@ class ShopifyController {
       const data = await ShopifyService.getDashboardOverview(req.user._id, preset);
       const payload = {
         success: true,
+        message: 'Dashboard analytics overview retrieved.',
         data,
         meta: {
           preset,
           cached: false,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          timestamp: new Date().toISOString()
         }
       };
 
-      // Cache for 5 minutes (300 seconds)
       CacheService.set(cacheKey, { ...payload, meta: { ...payload.meta, cached: true } }, 300);
 
       res.status(200).json(payload);
@@ -166,15 +193,16 @@ class ShopifyController {
       const data = await ShopifyService.getSalesTrend(req.user._id, preset);
       const payload = {
         success: true,
+        message: 'Sales trend analytics retrieved.',
         data,
         meta: {
           preset,
           cached: false,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          timestamp: new Date().toISOString()
         }
       };
 
-      // Cache for 5 minutes (300 seconds)
       CacheService.set(cacheKey, { ...payload, meta: { ...payload.meta, cached: true } }, 300);
 
       res.status(200).json(payload);
@@ -205,15 +233,17 @@ class ShopifyController {
       const data = await ShopifyService.getTopProducts(req.user._id, preset, limit);
       const payload = {
         success: true,
+        message: 'Top products analytics retrieved.',
         data,
         meta: {
           preset,
+          limit,
           cached: false,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          timestamp: new Date().toISOString()
         }
       };
 
-      // Cache for 10 minutes (600 seconds)
       CacheService.set(cacheKey, { ...payload, meta: { ...payload.meta, cached: true } }, 600);
 
       res.status(200).json(payload);
@@ -243,15 +273,16 @@ class ShopifyController {
       const data = await ShopifyService.getRecentOrders(req.user._id, limit);
       const payload = {
         success: true,
+        message: 'Recent orders retrieved.',
         data,
         meta: {
           limit,
           cached: false,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          timestamp: new Date().toISOString()
         }
       };
 
-      // Cache for 5 minutes (300 seconds)
       CacheService.set(cacheKey, { ...payload, meta: { ...payload.meta, cached: true } }, 300);
 
       res.status(200).json(payload);

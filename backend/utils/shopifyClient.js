@@ -9,7 +9,10 @@ class ShopifyClient {
    */
   static normalizeDomain(domain) {
     if (!domain || typeof domain !== 'string') {
-      throw new Error('Store domain is required and must be a string.');
+      const err = new Error('Store domain is required.');
+      err.status = 400;
+      err.errorType = 'INVALID_DOMAIN';
+      throw err;
     }
 
     let cleaned = domain.trim().toLowerCase();
@@ -21,19 +24,24 @@ class ShopifyClient {
     cleaned = cleaned.split('/')[0].trim();
 
     if (!cleaned) {
-      throw new Error('Invalid store domain provided.');
+      const err = new Error('Invalid store domain provided.');
+      err.status = 400;
+      err.errorType = 'INVALID_DOMAIN';
+      throw err;
     }
 
     // Append .myshopify.com if not already present
     if (!cleaned.endsWith('.myshopify.com')) {
-      // Remove any trailing dots or accidental extensions
       cleaned = `${cleaned.replace(/\.+$/, '')}.myshopify.com`;
     }
 
     // Basic domain validation pattern
     const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
     if (!domainRegex.test(cleaned)) {
-      throw new Error('Invalid Shopify store domain format. Example: my-store.myshopify.com');
+      const err = new Error('Invalid Shopify store domain format. Example: my-store.myshopify.com');
+      err.status = 400;
+      err.errorType = 'INVALID_DOMAIN';
+      throw err;
     }
 
     return cleaned;
@@ -49,11 +57,15 @@ class ShopifyClient {
    */
   static async graphqlRequest(storeDomain, accessToken, query, variables = {}) {
     if (!accessToken || typeof accessToken !== 'string') {
-      throw new Error('Shopify Admin Access Token is required.');
+      const err = new Error('Shopify Admin API Access Token is required.');
+      err.status = 400;
+      err.errorType = 'INVALID_TOKEN';
+      throw err;
     }
 
     const normalizedDomain = this.normalizeDomain(storeDomain);
-    const url = `https://${normalizedDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+    const apiVersion = process.env.SHOPIFY_API_VERSION || SHOPIFY_API_VERSION || '2025-01';
+    const url = `https://${normalizedDomain}/admin/api/${apiVersion}/graphql.json`;
 
     try {
       const response = await axios.post(
@@ -72,22 +84,37 @@ class ShopifyClient {
       if (response.data?.errors) {
         const errors = response.data.errors;
         let errorMessage = 'Shopify GraphQL query error.';
-        if (Array.isArray(errors) && errors.length > 0) {
-          errorMessage = errors.map((err) => err.message).join('; ');
-        } else if (typeof errors === 'string') {
-          errorMessage = errors;
+        let errorType = 'SHOPIFY_API_ERROR';
+
+        const rawErrorStr = Array.isArray(errors)
+          ? errors.map((e) => `${e.message || ''} ${e.extensions?.code || ''}`).join(' ')
+          : String(errors);
+
+        const upperErr = rawErrorStr.toUpperCase();
+
+        if (upperErr.includes('ACCESS_DENIED') || upperErr.includes('FORBIDDEN') || upperErr.includes('SCOPE')) {
+          errorType = 'MISSING_SCOPES';
+          errorMessage = 'Shopify token lacks required Admin API permissions/scopes.';
+        } else if (upperErr.includes('THROTTLED') || upperErr.includes('RATE_LIMIT')) {
+          errorType = 'RATE_LIMIT';
+          errorMessage = 'Shopify API rate limit exceeded. Please try again.';
+        } else if (upperErr.includes('SYNTAX') || upperErr.includes('VALIDATION') || upperErr.includes('FIELD')) {
+          errorType = 'GRAPHQL_ERROR';
+          errorMessage = Array.isArray(errors) ? errors.map((e) => e.message).join('; ') : 'GraphQL validation error.';
+        } else {
+          errorMessage = Array.isArray(errors) ? errors.map((e) => e.message).join('; ') : 'Shopify API error.';
         }
+
         const err = new Error(errorMessage);
-        err.status = 400; // Bad Request (never 401)
-        err.errorType = 'SHOPIFY_ERROR';
-        err.graphqlErrors = errors;
+        err.status = errorType === 'RATE_LIMIT' ? 429 : 400;
+        err.errorType = errorType;
         throw err;
       }
 
       if (!response.data?.data) {
-        const err = new Error('Invalid empty data payload received from Shopify API.');
+        const err = new Error('Empty data payload received from Shopify API.');
         err.status = 502;
-        err.errorType = 'SHOPIFY_ERROR';
+        err.errorType = 'SHOPIFY_API_ERROR';
         throw err;
       }
 
@@ -95,41 +122,45 @@ class ShopifyClient {
     } catch (error) {
       if (error.response) {
         const status = error.response.status;
+
         if (status === 401 || status === 403) {
-          const err = new Error('Invalid or expired Shopify Access Token. Access denied.');
-          err.status = 400; // Reclassified from 401 to 400 Bad Request
-          err.errorType = 'BAD_REQUEST';
+          const err = new Error('The Shopify Admin API Access Token is invalid or expired.');
+          err.status = 400;
+          err.errorType = 'INVALID_TOKEN';
           throw err;
         }
+
         if (status === 404) {
           const err = new Error(`Shopify store domain "${normalizedDomain}" not found.`);
-          err.status = 400; // Reclassified from 404 to 400 Bad Request
-          err.errorType = 'BAD_REQUEST';
+          err.status = 400;
+          err.errorType = 'INVALID_DOMAIN';
           throw err;
         }
+
         if (status === 429) {
-          const err = new Error('Shopify API rate limit exceeded. Please wait and try again.');
+          const err = new Error('Shopify API rate limit exceeded. Please wait a moment and try again.');
           err.status = 429;
           err.errorType = 'RATE_LIMIT';
           throw err;
         }
+
         const msg = error.response.data?.errors || error.response.data?.message || `Shopify API error (${status}).`;
         const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-        err.status = 502; // Downstream API failure
-        err.errorType = 'SHOPIFY_ERROR';
+        err.status = 502;
+        err.errorType = 'SHOPIFY_API_ERROR';
         throw err;
       }
 
       if (error.code === 'ECONNABORTED' || error.code === 'ENOTFOUND') {
-        const err = new Error('Request to Shopify API timed out or store host unreachable. Please try again.');
-        err.status = 502; // Downstream API failure
-        err.errorType = 'SHOPIFY_ERROR';
+        const err = new Error('Unable to reach Shopify API. Please verify network connectivity and store domain.');
+        err.status = 502;
+        err.errorType = 'NETWORK_ERROR';
         throw err;
       }
 
-      // Preserve existing status/errorType or default to 400 Bad Request
+      // Preserve mapped errors or assign defaults
       if (!error.status) error.status = 400;
-      if (!error.errorType) error.errorType = 'BAD_REQUEST';
+      if (!error.errorType) error.errorType = 'INTERNAL_SERVER_ERROR';
 
       throw error;
     }
