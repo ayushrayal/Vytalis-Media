@@ -1,20 +1,35 @@
-import React, { useState } from 'react';
-import { useShopifyStatus, useConnectShopify, useDisconnectShopify } from '../utils/shopifyApi';
-import { ShoppingBag, CheckCircle2, AlertCircle, RefreshCw, Unplug, Eye, EyeOff, Loader2, Calendar, Globe, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useShopifyStatus, useDisconnectShopify } from '../utils/shopifyApi';
+import { ShoppingBag, CheckCircle2, AlertCircle, RefreshCw, Unplug, Loader2, Calendar, Globe, Clock, ArrowRight } from 'lucide-react';
 
 const ShopifyIntegrationCard = () => {
-  const { data: status, isLoading, isError, error } = useShopifyStatus();
-  const connectMutation = useConnectShopify();
+  const { data: status, isLoading } = useShopifyStatus();
   const disconnectMutation = useDisconnectShopify();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [storeDomain, setStoreDomain] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [showToken, setShowToken] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const handleConnect = async (e) => {
+  useEffect(() => {
+    const errorParam = searchParams.get('shopify_error');
+    const connectedParam = searchParams.get('shopify_connected');
+
+    if (errorParam) {
+      setFormError(decodeURIComponent(errorParam));
+      searchParams.delete('shopify_error');
+      setSearchParams(searchParams);
+    } else if (connectedParam) {
+      setSuccessMsg('Shopify store connected via OAuth successfully!');
+      searchParams.delete('shopify_connected');
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams]);
+
+  const handleConnect = (e) => {
     e.preventDefault();
     setFormError(null);
     setSuccessMsg(null);
@@ -23,23 +38,13 @@ const ShopifyIntegrationCard = () => {
       setFormError('Please enter your Shopify Store Domain.');
       return;
     }
-    if (!accessToken.trim()) {
-      setFormError('Please enter your Shopify Admin API Token.');
-      return;
-    }
 
-    try {
-      await connectMutation.mutateAsync({
-        storeDomain: storeDomain.trim(),
-        accessToken: accessToken.trim()
-      });
-
-      setSuccessMsg('Shopify store connected successfully!');
-      setAccessToken('');
-      setIsReconnecting(false);
-    } catch (err) {
-      setFormError(err.response?.data?.message || err.message || 'Failed to connect Shopify store.');
-    }
+    setIsRedirecting(true);
+    const cleanDomain = storeDomain.trim().toLowerCase().replace(/^https?:\/\//i, '').split('/')[0];
+    const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+    
+    // Redirect browser to backend install route to initiate Shopify OAuth
+    window.location.href = `${backendUrl}/shopify/install?shop=${encodeURIComponent(cleanDomain)}`;
   };
 
   const handleDisconnect = async () => {
@@ -54,7 +59,6 @@ const ShopifyIntegrationCard = () => {
       await disconnectMutation.mutateAsync();
       setSuccessMsg('Shopify store disconnected successfully.');
       setStoreDomain('');
-      setAccessToken('');
       setIsReconnecting(false);
     } catch (err) {
       setFormError(err.response?.data?.message || err.message || 'Failed to disconnect Shopify store.');
@@ -63,7 +67,6 @@ const ShopifyIntegrationCard = () => {
 
   const startReconnect = () => {
     setStoreDomain(status?.storeDomain || '');
-    setAccessToken('');
     setIsReconnecting(true);
     setFormError(null);
     setSuccessMsg(null);
@@ -91,7 +94,7 @@ const ShopifyIntegrationCard = () => {
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Shopify Integration</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Connect your Shopify store to sync revenue & e-commerce metrics
+              Connect your Shopify store using Partner App OAuth 2.0
             </p>
           </div>
         </div>
@@ -248,11 +251,11 @@ const ShopifyIntegrationCard = () => {
         <form onSubmit={handleConnect} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {isReconnecting && (
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-              Updating connection credentials for <strong>{status?.storeDomain}</strong>
+              Updating OAuth authorization for <strong>{status?.storeDomain}</strong>
             </div>
           )}
 
-          {/* Store Domain */}
+          {/* Store Domain Input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               Shopify Store Domain
@@ -274,60 +277,43 @@ const ShopifyIntegrationCard = () => {
                 value={storeDomain}
                 onChange={(e) => setStoreDomain(e.target.value)}
                 required
+                disabled={isRedirecting}
                 style={{ width: '100%', color: 'var(--text-primary)' }}
               />
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              Example: <code>my-brand.myshopify.com</code> or <code>my-brand</code>
+              Enter your store handle (e.g. <code>my-brand.myshopify.com</code> or <code>my-brand</code>). No access token required.
             </span>
           </div>
 
-          {/* Admin API Token */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Shopify Admin API Access Token
-            </label>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.75rem 1rem',
-                background: 'var(--bg-primary)'
-              }}
-            >
-              <input
-                type={showToken ? 'text' : 'password'}
-                placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxx"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                required
-                style={{ width: '100%', color: 'var(--text-primary)' }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowToken(!showToken)}
-                style={{ color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              Created in Shopify Admin &gt; Settings &gt; Apps and sales channels &gt; Develop apps. Encrypted before storing.
-            </span>
+          {/* OAuth Info Notice */}
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <ShoppingBag size={16} color="#3b82f6" />
+            <span>You will be securely redirected to Shopify to authorize read permissions for orders, products, and customers.</span>
           </div>
 
           {/* Form Actions */}
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={connectMutation.isPending}
-              style={{ opacity: connectMutation.isPending ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              disabled={isRedirecting}
+              style={{ opacity: isRedirecting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
-              {connectMutation.isPending ? <Loader2 size={16} className="spin" /> : <ShoppingBag size={16} />}
-              <span>{connectMutation.isPending ? 'Verifying & Connecting...' : isReconnecting ? 'Save New Credentials' : 'Connect Shopify'}</span>
+              {isRedirecting ? <Loader2 size={16} className="spin" /> : <ArrowRight size={16} />}
+              <span>{isRedirecting ? 'Redirecting to Shopify...' : 'Connect Shopify'}</span>
             </button>
 
             {isReconnecting && (
@@ -335,6 +321,7 @@ const ShopifyIntegrationCard = () => {
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => setIsReconnecting(false)}
+                disabled={isRedirecting}
               >
                 Cancel
               </button>

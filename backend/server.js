@@ -26,6 +26,13 @@ if (!process.env.SHOPIFY_API_VERSION) {
   process.env.SHOPIFY_API_VERSION = '2025-01';
 }
 
+// Check Shopify OAuth credentials
+const oauthVars = ['SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET', 'SHOPIFY_REDIRECT_URI'];
+const missingOAuth = oauthVars.filter(v => !process.env[v]);
+if (missingOAuth.length > 0) {
+  console.warn(`[SERVER] Warning: Shopify OAuth variables missing: ${missingOAuth.join(', ')}. Set them in environment settings to enable full Partner App OAuth.`);
+}
+
 const PORT = process.env.PORT || 5000;
 
 // Connect to Database and start server

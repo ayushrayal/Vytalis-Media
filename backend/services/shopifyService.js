@@ -1,5 +1,7 @@
+import axios from 'axios';
 import UserRepository from '../repositories/userRepository.js';
 import ShopifyClient from '../utils/shopifyClient.js';
+import ShopifyOAuth from '../utils/shopifyOAuth.js';
 import encryption from '../utils/encryption.js';
 import { GET_DASHBOARD_ANALYTICS_QUERY } from '../graphql/shopify/dashboardQueries.js';
 import { GET_SALES_TREND_QUERY } from '../graphql/shopify/salesQueries.js';
@@ -55,6 +57,159 @@ class ShopifyService {
   }
 
   /**
+   * Generate Shopify OAuth Authorization URL.
+   */
+  static generateAuthUrl(storeDomain, userId) {
+    if (!storeDomain) {
+      const err = new Error('Shopify store domain is required.');
+      err.status = 400;
+      err.errorType = 'INVALID_DOMAIN';
+      throw err;
+    }
+
+    const normalizedDomain = ShopifyClient.normalizeDomain(storeDomain);
+    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    const redirectUri = process.env.SHOPIFY_REDIRECT_URI;
+
+    if (!clientId || !redirectUri) {
+      const err = new Error('Shopify OAuth credentials (SHOPIFY_CLIENT_ID, SHOPIFY_REDIRECT_URI) are not configured.');
+      err.status = 500;
+      err.errorType = 'INTERNAL_SERVER_ERROR';
+      throw err;
+    }
+
+    const scopes = 'read_orders,read_products,read_customers';
+    const state = ShopifyOAuth.generateOAuthState(userId);
+
+    const authUrl = `https://${normalizedDomain}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+
+    return {
+      authUrl,
+      storeDomain: normalizedDomain
+    };
+  }
+
+  /**
+   * Exchange OAuth temporary authorization code for permanent Admin API access token.
+   */
+  static async exchangeCodeForToken(shop, code) {
+    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      const err = new Error('Shopify OAuth client credentials are missing.');
+      err.status = 500;
+      err.errorType = 'INTERNAL_SERVER_ERROR';
+      throw err;
+    }
+
+    const url = `https://${shop}/admin/oauth/access_token`;
+
+    try {
+      const response = await axios.post(
+        url,
+        {
+          client_id: clientId,
+          client_secret: clientSecret,
+          code
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 15000
+        }
+      );
+
+      if (!response.data?.access_token) {
+        const err = new Error('Failed to retrieve access_token from Shopify OAuth.');
+        err.status = 400;
+        err.errorType = 'INVALID_TOKEN';
+        throw err;
+      }
+
+      return {
+        accessToken: response.data.access_token,
+        scope: response.data.scope ? response.data.scope.split(',') : []
+      };
+    } catch (error) {
+      if (error.response) {
+        const msg = error.response.data?.error_description || error.response.data?.error || 'OAuth token exchange failed.';
+        const err = new Error(msg);
+        err.status = 400;
+        err.errorType = 'INVALID_TOKEN';
+        throw err;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Handle Shopify OAuth Redirect Callback.
+   */
+  static async handleOAuthCallback(queryParams) {
+    const { shop, code, state } = queryParams;
+
+    if (!shop || !code || !state) {
+      const err = new Error('Missing required OAuth callback parameters (shop, code, or state).');
+      err.status = 400;
+      err.errorType = 'BAD_REQUEST';
+      throw err;
+    }
+
+    // 1. Verify HMAC Signature
+    const isHmacValid = ShopifyOAuth.verifyHMAC(queryParams);
+    if (!isHmacValid) {
+      const err = new Error('Invalid HMAC signature received from Shopify. OAuth security check failed.');
+      err.status = 400;
+      err.errorType = 'BAD_REQUEST';
+      throw err;
+    }
+
+    // 2. Verify State (CSRF & User context)
+    const decodedState = ShopifyOAuth.verifyOAuthState(state);
+    const userId = decodedState.userId;
+
+    const normalizedDomain = ShopifyClient.normalizeDomain(shop);
+
+    // 3. Exchange Code for Access Token
+    const { accessToken, scope } = await this.exchangeCodeForToken(normalizedDomain, code);
+
+    // 4. Verify Store Connection via GraphQL
+    const shopDetails = await this.verifyConnection(normalizedDomain, accessToken);
+
+    // 5. Update MongoDB User Document
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      const err = new Error('User account not found.');
+      err.status = 404;
+      err.errorType = 'NOT_FOUND';
+      throw err;
+    }
+
+    const encryptedToken = encryption.encrypt(accessToken.trim());
+    const now = new Date();
+
+    user.shopify = {
+      connected: true,
+      shopId: shopDetails.shopId,
+      storeDomain: shopDetails.storeDomain,
+      accessToken: encryptedToken,
+      shopName: shopDetails.shopName,
+      currency: shopDetails.currency,
+      timezone: shopDetails.timezone,
+      scopes: scope && scope.length > 0 ? scope : ['read_orders', 'read_products', 'read_customers'],
+      connectedAt: user.shopify?.connectedAt || now,
+      lastVerifiedAt: now
+    };
+
+    await UserRepository.save(user);
+
+    return {
+      user,
+      shopify: this.sanitizeShopifyResponse(user.shopify)
+    };
+  }
+
+  /**
    * Verify Shopify Admin API connection using GraphQL query.
    */
   static async verifyConnection(storeDomain, accessToken) {
@@ -81,40 +236,6 @@ class ShopifyService {
       currency: currencyCode || null,
       timezone: ianaTimezone || null
     };
-  }
-
-  /**
-   * Connect or Reconnect a Shopify store for a given user.
-   */
-  static async connectOrReconnect(userId, storeDomain, accessToken, scopes = []) {
-    const user = await UserRepository.findById(userId);
-    if (!user) {
-      const err = new Error('User not found.');
-      err.status = 404;
-      err.errorType = 'NOT_FOUND';
-      throw err;
-    }
-
-    const shopDetails = await this.verifyConnection(storeDomain, accessToken);
-    const encryptedToken = encryption.encrypt(accessToken.trim());
-    const now = new Date();
-
-    user.shopify = {
-      connected: true,
-      shopId: shopDetails.shopId,
-      storeDomain: shopDetails.storeDomain,
-      accessToken: encryptedToken,
-      shopName: shopDetails.shopName,
-      currency: shopDetails.currency,
-      timezone: shopDetails.timezone,
-      scopes: Array.isArray(scopes) ? scopes : [],
-      connectedAt: user.shopify?.connectedAt || now,
-      lastVerifiedAt: now
-    };
-
-    await UserRepository.save(user);
-
-    return this.sanitizeShopifyResponse(user.shopify);
   }
 
   /**
@@ -259,7 +380,6 @@ class ShopifyService {
     const data = await ShopifyClient.graphqlRequest(storeDomain, accessToken, GET_SALES_TREND_QUERY, { queryFilter });
     const orderEdges = data?.orders?.edges || [];
 
-    // Initialize daily map for all dates in preset range
     const dailyMap = {};
     const now = new Date();
     for (let i = days - 1; i >= 0; i--) {

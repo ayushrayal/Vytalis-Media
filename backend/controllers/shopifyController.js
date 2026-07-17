@@ -32,7 +32,37 @@ class ShopifyController {
   }
 
   /**
-   * POST /api/shopify/connect
+   * GET /api/shopify/install?shop=domain
+   */
+  static async install(req, res, next) {
+    try {
+      const shop = req.query.shop;
+      const { authUrl } = ShopifyService.generateAuthUrl(shop, req.user._id);
+      return res.redirect(authUrl);
+    } catch (error) {
+      ShopifyController.handleError(res, error, 'GET /api/shopify/install');
+    }
+  }
+
+  /**
+   * GET /api/shopify/callback
+   */
+  static async callback(req, res, next) {
+    try {
+      const result = await ShopifyService.handleOAuthCallback(req.query);
+      CacheService.delByPattern(`shopify_*:${result.user._id}:*`);
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}/dashboard/shopify?shopify_connected=true`);
+    } catch (error) {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const errorMsg = encodeURIComponent(error.message || 'Shopify OAuth authorization failed.');
+      return res.redirect(`${frontendUrl}/profile?shopify_error=${errorMsg}`);
+    }
+  }
+
+  /**
+   * POST /api/shopify/connect (Legacy Token connect fallback)
    */
   static async connect(req, res, next) {
     try {
@@ -56,7 +86,6 @@ class ShopifyController {
         scopes
       );
 
-      // Invalidate analytics caches on reconnect
       CacheService.delByPattern(`shopify_*:${req.user._id}:*`);
 
       res.status(200).json({

@@ -4,10 +4,16 @@ import authMiddleware from '../middlewares/auth.js';
 
 const router = Router();
 
-// Protect all Shopify routes with auth middleware
+// Public OAuth Callback route (validated via HMAC signature & signed state token)
+router.get('/callback', ShopifyController.callback);
+
+// Protected routes (require user JWT authentication)
 router.use(authMiddleware);
 
-// Connection & Credentials
+// OAuth Initiation Route
+router.get('/install', ShopifyController.install);
+
+// Connection & Status Management
 router.post('/connect', ShopifyController.connect);
 router.get('/status', ShopifyController.getStatus);
 router.post('/disconnect', ShopifyController.disconnect);
