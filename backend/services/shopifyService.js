@@ -86,11 +86,13 @@ class ShopifyService {
       `?client_id=${SHOPIFY_CLIENT_ID}` +
       `&scope=${SHOPIFY_SCOPES}` +
       `&redirect_uri=${encodeURIComponent(SHOPIFY_REDIRECT_URI)}` +
-      `&state=${state}`;
+      `&state=${state}` +
+      `&response_type=code`;
 
     console.log({
       normalizedShop,
       redirectUri: SHOPIFY_REDIRECT_URI,
+      callbackRoute: '/api/shopify/callback',
       authUrl
     });
 

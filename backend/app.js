@@ -83,9 +83,16 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Global OAuth Callback Route Aliases
-app.get('/auth/callback', ShopifyController.callback);
-app.get('/auth/shopify/callback', ShopifyController.callback);
+// Deprecated Callback Handling with 301 Redirects for Backward Compatibility
+const handleDeprecatedCallback = (req, res) => {
+  console.log('[Deprecated Shopify Callback]', req.originalUrl);
+  const queryString = new URLSearchParams(req.query).toString();
+  const target = '/api/shopify/callback' + (queryString ? `?${queryString}` : '');
+  return res.redirect(301, target);
+};
+
+app.get('/auth/callback', handleDeprecatedCallback);
+app.get('/auth/shopify/callback', handleDeprecatedCallback);
 
 // API Routes
 app.use('/api/auth', authRouter);

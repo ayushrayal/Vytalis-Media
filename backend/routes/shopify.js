@@ -6,7 +6,14 @@ const router = Router();
 
 // Public OAuth Callback route (validated via HMAC signature & signed state token)
 router.get('/callback', ShopifyController.callback);
-router.get('/auth/callback', ShopifyController.callback);
+
+// Deprecated Callback Alias with 301 Redirect for Backward Compatibility
+router.get('/auth/callback', (req, res) => {
+  console.log('[Deprecated Shopify Callback]', req.originalUrl);
+  const queryString = new URLSearchParams(req.query).toString();
+  const target = '/api/shopify/callback' + (queryString ? `?${queryString}` : '');
+  return res.redirect(301, target);
+});
 
 // Protected routes (require user JWT authentication)
 router.use(authMiddleware);

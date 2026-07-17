@@ -6,9 +6,16 @@ import authLimiter from '../middlewares/rateLimiter.js';
 
 const router = Router();
 
-// Public OAuth callback aliases
-router.get('/callback', ShopifyController.callback);
-router.get('/shopify/callback', ShopifyController.callback);
+// Deprecated Callback Handling with 301 Redirects for Backward Compatibility
+const handleDeprecatedCallback = (req, res) => {
+  console.log('[Deprecated Shopify Callback]', req.originalUrl);
+  const queryString = new URLSearchParams(req.query).toString();
+  const target = '/api/shopify/callback' + (queryString ? `?${queryString}` : '');
+  return res.redirect(301, target);
+};
+
+router.get('/callback', handleDeprecatedCallback);
+router.get('/shopify/callback', handleDeprecatedCallback);
 
 // Public routes with rate limiting
 router.post('/login', authLimiter, AuthController.login);
