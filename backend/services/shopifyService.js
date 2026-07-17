@@ -3,6 +3,7 @@ import UserRepository from '../repositories/userRepository.js';
 import ShopifyClient from '../utils/shopifyClient.js';
 import ShopifyOAuth from '../utils/shopifyOAuth.js';
 import encryption from '../utils/encryption.js';
+import { SHOPIFY_SCOPES } from '../constants/shopify.js';
 import { GET_DASHBOARD_ANALYTICS_QUERY } from '../graphql/shopify/dashboardQueries.js';
 import { GET_SALES_TREND_QUERY } from '../graphql/shopify/salesQueries.js';
 import { GET_TOP_PRODUCTS_QUERY } from '../graphql/shopify/productQueries.js';
@@ -78,7 +79,7 @@ class ShopifyService {
       throw err;
     }
 
-    const scopes = 'read_orders,read_products,read_customers,read_analytics,read_inventory';
+    const scopes = SHOPIFY_SCOPES;
     const state = ShopifyOAuth.generateOAuthState(userId);
 
     const authUrl = `https://${normalizedDomain}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;

@@ -67,7 +67,7 @@ app.use((req, res, next) => {
 
   next();
 });
-
+console.log(process.env.SHOPIFY_REDIRECT_URI);
 // Body Parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
