@@ -6,6 +6,7 @@ const router = Router();
 
 // Public OAuth Callback route (validated via HMAC signature & signed state token)
 router.get('/callback', ShopifyController.callback);
+router.get('/auth/callback', ShopifyController.callback);
 
 // Protected routes (require user JWT authentication)
 router.use(authMiddleware);
