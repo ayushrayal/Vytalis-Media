@@ -14,6 +14,7 @@ import perfMonitoring from './middlewares/perfMonitoring.js';
 import authRouter from './routes/auth.js';
 import dashboardRouter from './routes/dashboard.js';
 import campaignRouter from './routes/campaigns.js';
+import adsetRouter from './routes/adsets.js';
 import creativeRouter from './routes/creative.js';
 import aiRouter from './routes/ai.js';
 import debugRouter from './routes/debug.js';
@@ -83,6 +84,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/campaigns', campaignRouter);
+app.use('/api/adsets', adsetRouter);
 app.use('/api/creatives', creativeRouter);
 app.use('/api/analysis', aiRouter);
 

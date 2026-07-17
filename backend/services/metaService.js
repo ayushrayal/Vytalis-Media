@@ -4,12 +4,17 @@ import { getBaseField, fieldMap } from '../config/metaFields.js';
 import Logger from '../utils/logger.js';
 import DiagnosticsService from './diagnosticsService.js';
 import { PerfTracker } from '../utils/perfTracker.js';
+import CacheService from './cacheService.js';
+import cacheConfig from '../config/cacheConfig.js';
 
 
 // Cooldown state per Ad Account ID
 const cooldowns = new Map();
 // Memory cache of last successful responses
 const lastResponses = new Map();
+// Identical Graph API calls can be triggered by parallel dashboard widgets.
+// Keep one promise per request so only the first call reaches Meta.
+const inFlightRequests = new Map();
 
 /**
  * Lightweight concurrency queue to cap simultaneous Graph API requests
@@ -91,6 +96,24 @@ class MetaService {
     const accountId = user.metaAccountId;
     const requestHashKey = `${accountId}::${endpoint}::${JSON.stringify(params)}::${method}`;
     const requestId = user.requestId || 'N/A';
+    const canUseResponseCache = method === 'GET' && !params.forceRefresh;
+    const responseCacheKey = CacheService.generateKey(accountId, 'meta-api', {
+      endpoint,
+      method,
+      params
+    });
+
+    if (canUseResponseCache) {
+      const cachedResponse = CacheService.get(responseCacheKey);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      const pendingResponse = inFlightRequests.get(responseCacheKey);
+      if (pendingResponse) {
+        return pendingResponse;
+      }
+    }
 
     // --- RATE LIMIT COOLDOWN PER AD ACCOUNT ---
     const cooldownUntil = cooldowns.get(accountId);
@@ -197,7 +220,7 @@ class MetaService {
     }
 
     // Run request via the ConcurrencyQueue
-    return metaQueue.run(async ({ queueWaitTime, queueSize }) => {
+    const networkRequest = metaQueue.run(async ({ queueWaitTime, queueSize }) => {
       const backoffs = [0, 1000, 2000, 4000];
       let retryCount = 0;
       let lastError;
@@ -424,6 +447,26 @@ class MetaService {
       }
       throw lastError;
     });
+
+    if (!canUseResponseCache) {
+      return networkRequest;
+    }
+
+    // Daily charts change more often than aggregate cards, so they receive a shorter TTL.
+    const ttl = Number(params.time_increment) === 1
+      ? cacheConfig.metaApiDaily
+      : cacheConfig.metaApi;
+    const cacheableRequest = networkRequest.then((data) => {
+      CacheService.set(responseCacheKey, data, ttl);
+      return data;
+    });
+
+    inFlightRequests.set(responseCacheKey, cacheableRequest);
+    try {
+      return await cacheableRequest;
+    } finally {
+      inFlightRequests.delete(responseCacheKey);
+    }
   }
 
   /**

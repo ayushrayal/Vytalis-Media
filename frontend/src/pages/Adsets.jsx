@@ -7,6 +7,7 @@ import { TableSkeleton } from '../components/LoadingSkeleton';
 import { AlertCircle, Layers, Search } from 'lucide-react';
 import SectionError from '../components/SectionError';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
+import { formatCurrency, formatCompact } from '../utils/formatter';
 
 const Adsets = () => {
   const { datePreset, customRange, refreshTrigger } = useDashboard();
@@ -14,11 +15,11 @@ const Adsets = () => {
 
   const isCustomAndIncomplete = datePreset === 'custom' && (!customRange.since || !customRange.until);
 
-  // Fetch creatives list from backend to compile adsets map via React Query
-  const { data: creativeResponse, isLoading: loading, error: queryError, refetch: fetchAdsets } = useQuery({
-    queryKey: ['creatives-adsets', { datePreset, customRange, refreshTrigger }],
+  // Fetch ad set metadata and period-specific metrics together.
+  const { data: adsetResponse, isLoading: loading, error: queryError, refetch: fetchAdsets } = useQuery({
+    queryKey: ['adsets', { datePreset, customRange, refreshTrigger, searchQuery }],
     queryFn: async () => {
-      let url = `${API_URL}/api/creatives?preset=${datePreset}`;
+      let url = `${API_URL}/api/adsets?preset=${datePreset}&search=${encodeURIComponent(searchQuery)}`;
       if (datePreset === 'custom' && customRange.since && customRange.until) {
         url += `&since=${customRange.since}&until=${customRange.until}`;
       }
@@ -29,37 +30,7 @@ const Adsets = () => {
   });
 
   const error = queryError ? getFriendlyErrorMessage(queryError) : null;
-  const creatives = creativeResponse?.data || [];
-
-  // Compile unique Ad Sets map
-  const adsets = React.useMemo(() => {
-    const adsetsMap = {};
-
-    creatives.forEach(creative => {
-      creative.ads.forEach(ad => {
-        const adsetId = ad.adsetId || 'unknown';
-        const adsetName = ad.adsetName || 'Unnamed Ad Set';
-
-        if (!adsetsMap[adsetId]) {
-          adsetsMap[adsetId] = {
-            id: adsetId,
-            name: adsetName,
-            campaignName: ad.campaignName,
-            campaignId: ad.campaignId,
-            status: ad.adStatus || 'ACTIVE'
-          };
-        }
-      });
-    });
-
-    return Object.values(adsetsMap);
-  }, [creatives]);
-
-  const filteredAdsets = adsets.filter(a => 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    a.campaignName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.id.includes(searchQuery)
-  );
+  const adsets = adsetResponse?.data || [];
 
   return (
     <div>
@@ -95,7 +66,7 @@ const Adsets = () => {
 
       {loading ? (
         <TableSkeleton rows={8} />
-      ) : filteredAdsets.length > 0 ? (
+      ) : adsets.length > 0 ? (
         <div className="card fade-in" style={{ overflowX: 'auto', padding: 0 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
             <thead>
@@ -104,10 +75,21 @@ const Adsets = () => {
                 <th style={{ padding: '1rem' }}>Ad Set Name</th>
                 <th style={{ padding: '1rem' }}>Parent Campaign</th>
                 <th style={{ padding: '1rem' }}>Status</th>
+                <th style={{ padding: '1rem' }}>Spend</th>
+                <th style={{ padding: '1rem' }}>Reach</th>
+                <th style={{ padding: '1rem' }}>Impressions</th>
+                <th style={{ padding: '1rem' }}>Frequency</th>
+                <th style={{ padding: '1rem' }}>CTR</th>
+                <th style={{ padding: '1rem' }}>CPM</th>
+                <th style={{ padding: '1rem' }}>CPC</th>
+                <th style={{ padding: '1rem' }}>Adds to Cart</th>
+                <th style={{ padding: '1rem' }}>Checkout</th>
+                <th style={{ padding: '1rem' }}>Purchases</th>
+                <th style={{ padding: '1rem' }}>ROAS</th>
               </tr>
             </thead>
             <tbody>
-              {filteredAdsets.map((row) => (
+              {adsets.map((row) => (
                 <tr key={row.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background var(--transition-fast)' }} className="table-row-hover">
                   <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{row.id}</td>
                   <td style={{ padding: '1rem', fontWeight: 600 }}>{row.name}</td>
@@ -115,7 +97,18 @@ const Adsets = () => {
                     {row.campaignName} <br />
                     <span style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>({row.campaignId})</span>
                   </td>
-                  <td style={{ padding: '1rem' }}><span className="badge badge-active" style={{ fontSize: '0.75rem' }}>{row.status}</span></td>
+                  <td style={{ padding: '1rem' }}><span className={`badge ${row.status === 'ACTIVE' ? 'badge-active' : 'badge-paused'}`} style={{ fontSize: '0.75rem' }}>{row.status}</span></td>
+                  <td style={{ padding: '1rem', fontWeight: 600 }}>{formatCurrency(row.spend)}</td>
+                  <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{formatCompact(row.reach)}</td>
+                  <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{formatCompact(row.impressions)}</td>
+                  <td style={{ padding: '1rem' }}>{row.frequency.toFixed(2)}</td>
+                  <td style={{ padding: '1rem' }}>{row.ctr.toFixed(2)}%</td>
+                  <td style={{ padding: '1rem' }}>{formatCurrency(row.cpm)}</td>
+                  <td style={{ padding: '1rem' }}>{formatCurrency(row.cpc)}</td>
+                  <td style={{ padding: '1rem' }}>{formatCompact(row.addsToCart)}</td>
+                  <td style={{ padding: '1rem' }}>{formatCompact(row.checkoutInitiated)}</td>
+                  <td style={{ padding: '1rem', fontWeight: 600 }}>{formatCompact(row.purchases)}</td>
+                  <td style={{ padding: '1rem', fontWeight: 600, color: row.roas >= 1.5 ? 'var(--success)' : 'var(--text-primary)' }}>{row.roas.toFixed(2)}×</td>
                 </tr>
               ))}
             </tbody>
