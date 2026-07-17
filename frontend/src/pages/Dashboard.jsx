@@ -42,9 +42,7 @@ const Dashboard = () => {
     refreshTrigger,
     refreshData,
     datePreset,
-    setDatePreset,
-    customRange,
-    setCustomRange
+    customRange
   } = useDashboard();
 
   const [selectedMetric, setSelectedMetric] = useState(null);
@@ -182,61 +180,6 @@ const Dashboard = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          {/* Preset Picker */}
-          <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-tertiary)', padding: '0.25rem', borderRadius: 'var(--radius-md)' }}>
-            {['today', 'yesterday', 'last_7_days', 'last_30_days', 'custom'].map(preset => (
-              <button
-                key={preset}
-                onClick={() => setDatePreset(preset)}
-                style={{
-                  padding: '0.4rem 0.85rem',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  textTransform: 'capitalize',
-                  background: datePreset === preset ? 'var(--bg-secondary)' : 'transparent',
-                  color: datePreset === preset ? 'var(--primary)' : 'var(--text-secondary)',
-                  boxShadow: datePreset === preset ? 'var(--shadow-sm)' : 'none',
-                  cursor: 'pointer',
-                  transition: 'background var(--transition-fast)'
-                }}
-              >
-                {preset.replace(/_/g, ' ')}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom Date inputs */}
-          {datePreset === 'custom' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', animation: 'fadeIn 0.2s ease-out' }}>
-              <input
-                type="date"
-                value={customRange.since}
-                onChange={(e) => setCustomRange(prev => ({ ...prev, since: e.target.value }))}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-color)',
-                  background: 'var(--bg-secondary)',
-                  fontSize: '0.85rem'
-                }}
-              />
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>to</span>
-              <input
-                type="date"
-                value={customRange.until}
-                onChange={(e) => setCustomRange(prev => ({ ...prev, until: e.target.value }))}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-color)',
-                  background: 'var(--bg-secondary)',
-                  fontSize: '0.85rem'
-                }}
-              />
-            </div>
-          )}
-
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={exportToCSV}

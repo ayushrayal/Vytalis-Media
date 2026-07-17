@@ -26,12 +26,14 @@ import {
   X,
   AlertCircle
 } from 'lucide-react';
+import DateRangeSelector from '../components/DateRangeSelector';
 
 const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData, autoRefresh, setAutoRefresh }) => {
   const { user, logout, metaTokenError } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const isReportingPage = !['/profile', '/ai-insights'].includes(location.pathname);
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(autoRefresh === 'off' ? null : parseInt(autoRefresh) * 60);
@@ -359,6 +361,7 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
 
         {/* Main Content Pane */}
         <main style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+          {isReportingPage && <DateRangeSelector />}
           {children}
         </main>
       </div>

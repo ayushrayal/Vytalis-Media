@@ -162,22 +162,30 @@ class CreativeController {
   static async getCreativeById(req, res, next) {
     try {
       const { id: creativeId } = req.params;
+      const { preset = 'last_7_days', since, until } = req.query;
       const user = req.user;
+      const customRange = since && until ? { since, until } : null;
+      const { current } = DateHelper.getRanges(preset, customRange);
 
       const cacheKey = CacheService.generateKey(user.id || user._id?.toString(), `creatives/detail/basic/${creativeId}`, {
-        metaAccountId: user.metaAccountId
+        metaAccountId: user.metaAccountId,
+        preset,
+        current
       });
       const cached = CacheService.get(cacheKey);
       if (cached) {
         return res.status(200).json({
           success: true,
           data: cached,
-          meta: { generatedAt: new Date().toISOString(), cache: true }
+          meta: { generatedAt: new Date().toISOString(), cache: true, dateRange: current }
         });
       }
 
-      const result = await CreativeService.getCreativeById(user, creativeId);
-      if (!result) {
+      const [creative, metrics] = await Promise.all([
+        CreativeService.getCreativeById(user, creativeId),
+        CreativeService.getCreativePerformance(user, creativeId, current)
+      ]);
+      if (!creative) {
         return res.status(404).json({
           success: false,
           errorType: 'NOT_FOUND',
@@ -185,14 +193,34 @@ class CreativeController {
         });
       }
 
-      CacheService.set(cacheKey, result, 21600); // 6 hours metadata cache (Refinement 3)
+      const periodMetrics = {
+        spend: 0,
+        purchases: 0,
+        roas: 0,
+        ...metrics
+      };
+      const isCarousel = creative.object_story_spec?.carousel_spec || creative.ads.some(ad => ad.adName.toLowerCase().includes('carousel'));
+      const category = creative.isVideo
+        ? ClassificationService.classifyVideo(creative.name, creative.copyText)
+        : ClassificationService.classifyStatic(creative.name, creative.copyText, isCarousel);
+      const result = {
+        ...creative,
+        metrics: periodMetrics,
+        category,
+        performanceBadge: ClassificationService.getPerformanceBadge(periodMetrics.roas, periodMetrics.spend, periodMetrics.purchases),
+        status: creative.ads.some(ad => ad.adStatus === 'ACTIVE') ? 'ACTIVE' : 'PAUSED'
+      };
+
+      // Metadata is stable, but creative performance must remain scoped to the selected range.
+      CacheService.set(cacheKey, result, 300);
 
       res.status(200).json({
         success: true,
         data: result,
         meta: {
           generatedAt: new Date().toISOString(),
-          cache: false
+          cache: false,
+          dateRange: current
         }
       });
     } catch (error) {
