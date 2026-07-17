@@ -12,6 +12,5 @@ router.get('/trends', DashboardController.getTrends);
 router.get('/charts', DashboardController.getCharts);
 router.get('/comparison', DashboardController.getComparison);
 router.get('/breakdowns', DashboardController.getBreakdowns);
-router.get('/brand', DashboardController.getBrandName);
 
 export default router;

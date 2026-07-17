@@ -3,7 +3,6 @@ import validator from 'validator';
 import UserService from './userService.js';
 import UserRepository from '../repositories/userRepository.js';
 import encryption from '../utils/encryption.js';
-import MetaService from './metaService.js';
 
 class AuthService {
   /**
@@ -44,19 +43,8 @@ class AuthService {
       throw err;
     }
 
-    // Update lastLoginAt and attempt to sync metaAccountName if missing
+    // Update lastLoginAt
     user.lastLoginAt = new Date();
-    if (!user.metaAccountName && user.metaAccountId && user.metaAccessToken) {
-      try {
-        const accountInfo = await MetaService.getAccountName(user);
-        if (accountInfo?.name && accountInfo.name.trim()) {
-          user.metaAccountName = accountInfo.name.trim();
-        }
-      } catch (err) {
-        // Ignore fetch error
-      }
-    }
-
     await UserRepository.save(user);
     console.log('[Login Flow] Password verified and lastLoginAt updated.');
 
@@ -78,7 +66,6 @@ class AuthService {
         companyName: user.companyName,
         email: user.email,
         metaAccountId: user.metaAccountId,
-        metaAccountName: user.metaAccountName || '',
         role: user.role,
         isActive: user.isActive,
         lastLoginAt: user.lastLoginAt
@@ -208,7 +195,6 @@ class AuthService {
         companyName: newUser.companyName,
         email: newUser.email,
         metaAccountId: newUser.metaAccountId,
-        metaAccountName: newUser.metaAccountName || '',
         role: newUser.role,
         isActive: newUser.isActive,
         lastLoginAt: newUser.lastLoginAt

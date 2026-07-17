@@ -66,15 +66,16 @@ const Login = () => {
             justifyContent: 'center',
             color: '#fff',
             fontWeight: 700,
-            fontSize: '1.75rem',
+            fontSize: '1.35rem',
             margin: '0 auto 1rem auto',
-            boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)'
+            boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)',
+            letterSpacing: '-0.5px'
           }}>
-            M
+            VM
           </div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 700 }}>Welcome Back</h2>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 700 }}>Vytalis Media Reporting</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-            Meta Ads AI Analytics Hub
+            Scaling brands since 2022
           </p>
         </div>
 

@@ -175,14 +175,7 @@ const Dashboard = () => {
         paddingBottom: '1.5rem'
       }} id="dashboard-header-bar">
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>
-            Meta Ads Performance Overview
-            {data?.brandName ? (
-              <>
-                {' '}of <span style={{ color: 'var(--primary)' }}>{data.brandName}</span>
-              </>
-            ) : null}
-          </h1>
+          <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>Meta Performance Overview</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
             Live metrics from OUTCOME_SALES campaigns
           </p>

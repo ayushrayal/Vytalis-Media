@@ -4,7 +4,6 @@ import { getBaseField, fieldMap } from '../config/metaFields.js';
 import Logger from '../utils/logger.js';
 import DiagnosticsService from './diagnosticsService.js';
 import { PerfTracker } from '../utils/perfTracker.js';
-import CacheService from './cacheService.js';
 
 
 // Cooldown state per Ad Account ID
@@ -207,14 +206,14 @@ class MetaService {
       while (retryCount < backoffs.length) {
         try {
           if (process.env.NODE_ENV !== 'production') {
-            CacheService.safeTime("Meta API");
+            console.time("Meta API");
           }
           const response = await fetch(url, requestOptions);
           const data = await response.json();
           const responseTime = Date.now() - requestStart;
 
           if (process.env.NODE_ENV !== 'production') {
-            CacheService.safeTimeEnd("Meta API");
+            console.timeEnd("Meta API");
             console.log(`[Meta API Call] Endpoint: ${endpoint || '/'} - Duration: ${responseTime}ms - Version: ${metaApi.version} - Status: ${response.status}`);
             PerfTracker.increment('metaRequests');
             PerfTracker.track('metaApi', responseTime);
@@ -432,23 +431,6 @@ class MetaService {
    */
   static async get(endpoint, user, params = {}, options = {}) {
     return this.request(endpoint, user, { method: 'GET', params, ...options });
-  }
-
-  /**
-   * Fetch Meta Ad Account Details including name and business info
-   * GET /act_<META_ACCOUNT_ID>?fields=name,business{name}
-   */
-  static async getAccountName(user) {
-    if (!user || !user.metaAccountId || !user.metaAccessToken) {
-      return null;
-    }
-    const accountId = user.metaAccountId;
-    const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-    try {
-      return await this.get(formattedAccountId, user, { fields: 'name,business{name}' });
-    } catch (err) {
-      return null;
-    }
   }
 }
 

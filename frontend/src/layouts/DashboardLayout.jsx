@@ -106,7 +106,7 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
           justifyContent: 'space-between',
           borderBottom: '1px solid var(--border-color)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{
               width: '40px',
               height: '40px',
@@ -117,31 +117,14 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
               justifyContent: 'center',
               color: '#fff',
               fontWeight: 'bold',
-              fontSize: '1.1rem',
-              flexShrink: 0
+              fontSize: '1rem',
+              letterSpacing: '-0.5px'
             }}>
               VM
             </div>
-            <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-              <h3 style={{
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}>
-                Vytalis Media Reporting
-              </h3>
-              <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>
-                <p className="marquee-subtitle" style={{
-                  fontSize: '0.7rem',
-                  color: 'var(--text-tertiary)',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-block'
-                }}>
-                  Scaling brands since 2022
-                </p>
-              </div>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, whiteSpace: 'nowrap' }}>Vytalis Media Reporting</h3>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Scaling brands since 2022</p>
             </div>
           </div>
           <button 
@@ -481,14 +464,6 @@ const DashboardLayout = ({ children, globalSearch, setGlobalSearch, refreshData,
         @keyframes slideUp {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes marqueeSubtitle {
-          0% { transform: translateX(0%); }
-          50% { transform: translateX(-30%); }
-          100% { transform: translateX(0%); }
-        }
-        .marquee-subtitle {
-          animation: marqueeSubtitle 15s ease-in-out infinite;
         }
       `}</style>
     </div>

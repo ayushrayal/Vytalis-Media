@@ -2,7 +2,6 @@ import DashboardService from '../services/dashboardService.js';
 import ChartService from '../services/chartService.js';
 import BreakdownService from '../services/breakdownService.js';
 import CacheService from '../services/cacheService.js';
-import BrandService from '../services/brandService.js';
 import DateHelper from '../utils/dateHelper.js';
 
 class DashboardController {
@@ -143,23 +142,6 @@ class DashboardController {
       res.status(200).json({
         success: true,
         data: result
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * GET /api/dashboard/brand
-   * Returns resolved brand name for the authenticated user
-   */
-  static async getBrandName(req, res, next) {
-    try {
-      const user = req.user;
-      const data = await BrandService.getBrandName(user);
-      res.status(200).json({
-        success: true,
-        data
       });
     } catch (error) {
       next(error);

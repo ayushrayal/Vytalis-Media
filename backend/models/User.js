@@ -32,11 +32,6 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Meta Access Token is required'],
     trim: true
   },
-  metaAccountName: {
-    type: String,
-    trim: true,
-    default: ''
-  },
   role: {
     type: String,
     enum: ['Admin', 'Manager', 'Client'],

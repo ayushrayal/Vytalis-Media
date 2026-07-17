@@ -3,7 +3,6 @@ import InsightService from './insightService.js';
 import ComparisonService from './comparisonService.js';
 import DateHelper from '../utils/dateHelper.js';
 import CacheService from './cacheService.js';
-import BrandService from './brandService.js';
 
 class DashboardService {
   /**
@@ -26,17 +25,14 @@ class DashboardService {
     
     const cachedData = CacheService.get(cacheKey);
     if (cachedData) {
-      const { brandName } = await BrandService.getBrandName(user);
-      cachedData.brandName = brandName;
       console.log(`[Cache] Serving Dashboard Overview from cache for key: ${cacheKey}`);
       return cachedData;
     }
 
     console.log(`[API] Fetching Dashboard Overview from Meta API for current: ${JSON.stringify(current)}, previous: ${JSON.stringify(previous)}`);
 
-    // 2. Fetch campaign list, insights, and resolved brand name in parallel
-    const [{ brandName }, campaigns, currentInsights, previousInsights] = await Promise.all([
-      BrandService.getBrandName(user),
+    // 2. Fetch campaign list and insights in parallel
+    const [campaigns, currentInsights, previousInsights] = await Promise.all([
       CampaignService.getSalesCampaigns(user),
       InsightService.getAccountAggregatedInsights(user, current),
       InsightService.getAccountAggregatedInsights(user, previous)
@@ -53,7 +49,6 @@ class DashboardService {
     const activeCampaigns = campaigns.filter(c => c.status === 'ACTIVE');
     
     const result = {
-      brandName,
       dateRange: current,
       previousDateRange: previous,
       campaignsCount: campaigns.length,

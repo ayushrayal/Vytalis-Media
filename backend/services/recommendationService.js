@@ -1,6 +1,5 @@
 import config from '../config/recommendationConfig.js';
 import { PerfTracker } from '../utils/perfTracker.js';
-import CacheService from './cacheService.js';
 
 class RecommendationService {
   /**
@@ -9,7 +8,7 @@ class RecommendationService {
   static generateCampaignRecommendations(overview, campaign, trends = [], adSets = []) {
     const start = Date.now();
     if (process.env.NODE_ENV !== 'production') {
-      CacheService.safeTime("Recommendations");
+      console.time("Recommendations");
     }
 
     try {
@@ -104,7 +103,7 @@ class RecommendationService {
       return recommendations;
     } finally {
       if (process.env.NODE_ENV !== 'production') {
-        CacheService.safeTimeEnd("Recommendations");
+        console.timeEnd("Recommendations");
         const duration = Date.now() - start;
         PerfTracker.track('recommendations', duration);
       }
@@ -118,7 +117,7 @@ class RecommendationService {
   static generateCreativeRecommendations(metrics, creative) {
     const start = Date.now();
     if (process.env.NODE_ENV !== 'production') {
-      CacheService.safeTime("Recommendations");
+      console.time("Recommendations");
     }
 
     try {
@@ -206,7 +205,7 @@ class RecommendationService {
       return recommendations;
     } finally {
       if (process.env.NODE_ENV !== 'production') {
-        CacheService.safeTimeEnd("Recommendations");
+        console.timeEnd("Recommendations");
         const duration = Date.now() - start;
         PerfTracker.track('recommendations', duration);
       }
