@@ -1,12 +1,11 @@
-import axios from 'axios';
-import { API_URL } from '../config/api';
+import api, { API_URL } from '../config/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 /**
  * Fetch current Shopify connection status.
  */
 export const getShopifyStatus = async () => {
-  const response = await axios.get(`${API_URL}/api/shopify/status`);
+  const response = await api.get('/api/shopify/status');
   return response.data.data;
 };
 
@@ -14,7 +13,7 @@ export const getShopifyStatus = async () => {
  * Initiate Shopify OAuth Install flow by fetching authorization redirect URL.
  */
 export const fetchShopifyInstallUrl = async (storeDomain) => {
-  const response = await axios.get(`${API_URL}/api/shopify/install`, {
+  const response = await api.get('/api/shopify/install', {
     params: { shop: storeDomain }
   });
   return response.data?.data?.redirectUrl || response.data?.redirectUrl;
@@ -24,7 +23,7 @@ export const fetchShopifyInstallUrl = async (storeDomain) => {
  * Connect or reconnect a Shopify store.
  */
 export const connectShopify = async ({ storeDomain, accessToken, scopes }) => {
-  const response = await axios.post(`${API_URL}/api/shopify/connect`, {
+  const response = await api.post('/api/shopify/connect', {
     storeDomain,
     accessToken,
     scopes
@@ -36,7 +35,7 @@ export const connectShopify = async ({ storeDomain, accessToken, scopes }) => {
  * Disconnect current Shopify store.
  */
 export const disconnectShopify = async () => {
-  const response = await axios.post(`${API_URL}/api/shopify/disconnect`);
+  const response = await api.post('/api/shopify/disconnect');
   return response.data.data;
 };
 
@@ -44,28 +43,28 @@ export const disconnectShopify = async () => {
  * Analytics API fetchers
  */
 export const getShopifyOverview = async ({ preset = '30d', refresh = false }) => {
-  const response = await axios.get(`${API_URL}/api/shopify/dashboard`, {
+  const response = await api.get('/api/shopify/dashboard', {
     params: { preset, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
 
 export const getShopifySalesTrend = async ({ preset = '30d', refresh = false }) => {
-  const response = await axios.get(`${API_URL}/api/shopify/sales-trend`, {
+  const response = await api.get('/api/shopify/sales-trend', {
     params: { preset, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
 
 export const getShopifyTopProducts = async ({ preset = '30d', limit = 10, refresh = false }) => {
-  const response = await axios.get(`${API_URL}/api/shopify/top-products`, {
+  const response = await api.get('/api/shopify/top-products', {
     params: { preset, limit, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
 
 export const getShopifyRecentOrders = async ({ limit = 10, refresh = false }) => {
-  const response = await axios.get(`${API_URL}/api/shopify/recent-orders`, {
+  const response = await api.get('/api/shopify/recent-orders', {
     params: { limit, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;

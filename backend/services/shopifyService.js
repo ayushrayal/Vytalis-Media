@@ -78,7 +78,7 @@ class ShopifyService {
       throw err;
     }
 
-    const scopes = 'read_orders,read_products,read_customers';
+    const scopes = 'read_orders,read_products,read_customers,read_analytics,read_inventory';
     const state = ShopifyOAuth.generateOAuthState(userId);
 
     const authUrl = `https://${normalizedDomain}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
@@ -146,6 +146,13 @@ class ShopifyService {
    * Handle Shopify OAuth Redirect Callback.
    */
   static async handleOAuthCallback(queryParams) {
+    if (queryParams.error || queryParams.error_description) {
+      const err = new Error(queryParams.error_description || 'Shopify authorization was cancelled.');
+      err.status = 400;
+      err.errorType = 'CANCELLED';
+      throw err;
+    }
+
     const { shop, code, state } = queryParams;
 
     if (!shop || !code || !state) {
@@ -160,15 +167,31 @@ class ShopifyService {
     if (!isHmacValid) {
       const err = new Error('Invalid HMAC signature received from Shopify. OAuth security check failed.');
       err.status = 400;
-      err.errorType = 'BAD_REQUEST';
+      err.errorType = 'INVALID_HMAC';
       throw err;
     }
 
     // 2. Verify State (CSRF & User context)
-    const decodedState = ShopifyOAuth.verifyOAuthState(state);
+    let decodedState;
+    try {
+      decodedState = ShopifyOAuth.verifyOAuthState(state);
+    } catch (stateErr) {
+      const err = new Error(stateErr.message || 'OAuth state token validation failed.');
+      err.status = 400;
+      err.errorType = 'INVALID_STATE';
+      throw err;
+    }
     const userId = decodedState.userId;
 
-    const normalizedDomain = ShopifyClient.normalizeDomain(shop);
+    let normalizedDomain;
+    try {
+      normalizedDomain = ShopifyClient.normalizeDomain(shop);
+    } catch (domErr) {
+      const err = new Error('Invalid Shopify store domain provided in OAuth callback.');
+      err.status = 400;
+      err.errorType = 'INVALID_DOMAIN';
+      throw err;
+    }
 
     // 3. Exchange Code for Access Token
     const { accessToken, scope } = await this.exchangeCodeForToken(normalizedDomain, code);

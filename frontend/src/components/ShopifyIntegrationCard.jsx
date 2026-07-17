@@ -15,14 +15,39 @@ const ShopifyIntegrationCard = () => {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    const errorParam = searchParams.get('shopify_error');
-    const connectedParam = searchParams.get('shopify_connected');
+    const statusParam = searchParams.get('status');
+    const legacyError = searchParams.get('shopify_error');
+    const legacyConnected = searchParams.get('shopify_connected');
 
-    if (errorParam) {
-      setFormError(decodeURIComponent(errorParam));
+    if (statusParam) {
+      switch (statusParam) {
+        case 'success':
+          setSuccessMsg('Shopify store connected successfully.');
+          break;
+        case 'cancelled':
+          setFormError('Shopify authorization was cancelled.');
+          break;
+        case 'invalid_hmac':
+          setFormError('Security validation failed.');
+          break;
+        case 'invalid_state':
+          setFormError('Session expired. Please try again.');
+          break;
+        case 'invalid_domain':
+          setFormError('Invalid store domain.');
+          break;
+        case 'error':
+        default:
+          setFormError('Unable to connect Shopify store.');
+          break;
+      }
+      searchParams.delete('status');
+      setSearchParams(searchParams);
+    } else if (legacyError) {
+      setFormError(decodeURIComponent(legacyError));
       searchParams.delete('shopify_error');
       setSearchParams(searchParams);
-    } else if (connectedParam) {
+    } else if (legacyConnected) {
       setSuccessMsg('Shopify store connected via OAuth successfully!');
       searchParams.delete('shopify_connected');
       setSearchParams(searchParams);
@@ -64,15 +89,12 @@ const ShopifyIntegrationCard = () => {
     setIsRedirecting(true);
 
     try {
-      // Execute authenticated API call to obtain OAuth redirect URL
       const redirectUrl = await fetchShopifyInstallUrl(cleanDomain);
 
-      // Safety check: verify redirect URL exists before window navigation
       if (!redirectUrl || typeof redirectUrl !== 'string') {
         throw new Error('Missing Shopify OAuth authorization redirect URL.');
       }
 
-      // Execute window redirect to Shopify OAuth grant screen
       window.location.href = redirectUrl;
     } catch (err) {
       setIsRedirecting(false);
@@ -128,7 +150,7 @@ const ShopifyIntegrationCard = () => {
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Shopify Integration</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Connect your Shopify store using Partner App OAuth 2.0
+              Connect your store securely via Shopify Partner App OAuth 2.0
             </p>
           </div>
         </div>
@@ -266,7 +288,7 @@ const ShopifyIntegrationCard = () => {
               style={{ padding: '0.5rem 0.85rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
               <RefreshCw size={14} />
-              <span>Reconnect Store</span>
+              <span>Reconnect</span>
             </button>
 
             <button
@@ -307,7 +329,7 @@ const ShopifyIntegrationCard = () => {
               <Globe size={18} color="var(--text-tertiary)" style={{ marginRight: '0.75rem' }} />
               <input
                 type="text"
-                placeholder="your-store.myshopify.com"
+                placeholder="threadnbutton.myshopify.com"
                 value={storeDomain}
                 onChange={(e) => setStoreDomain(e.target.value)}
                 required
@@ -316,7 +338,7 @@ const ShopifyIntegrationCard = () => {
               />
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              Enter your store handle (e.g. <code>my-brand.myshopify.com</code> or <code>my-brand</code>). No access token required.
+              Enter your store handle (e.g. <code>threadnbutton.myshopify.com</code> or <code>threadnbutton</code>). No access token required.
             </span>
           </div>
 
@@ -335,19 +357,29 @@ const ShopifyIntegrationCard = () => {
             }}
           >
             <ShoppingBag size={16} color="#3b82f6" />
-            <span>You will be securely redirected to Shopify to authorize read permissions for orders, products, and customers.</span>
+            <span>You will be securely redirected to Shopify to approve permissions for orders, products, customers, and analytics.</span>
           </div>
 
-          {/* Form Actions */}
+          {/* Form Actions - Continue with Shopify CTA */}
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={isRedirecting}
-              style={{ opacity: isRedirecting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              style={{
+                opacity: isRedirecting ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                backgroundColor: '#95BF47', // Shopify Brand Color
+                borderColor: '#95BF47',
+                color: '#ffffff',
+                fontWeight: 600,
+                padding: '0.65rem 1.25rem'
+              }}
             >
-              {isRedirecting ? <Loader2 size={16} className="spin" /> : <ArrowRight size={16} />}
-              <span>{isRedirecting ? 'Connecting to Shopify...' : 'Connect Shopify'}</span>
+              {isRedirecting ? <Loader2 size={18} className="spin" /> : <ShoppingBag size={18} />}
+              <span>{isRedirecting ? 'Connecting...' : 'Continue with Shopify'}</span>
             </button>
 
             {isReconnecting && (

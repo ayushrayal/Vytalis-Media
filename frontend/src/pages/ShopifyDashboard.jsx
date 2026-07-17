@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ShoppingBag, RefreshCw, AlertCircle, Clock, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { ShoppingBag, RefreshCw, AlertCircle, CheckCircle2, Clock, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import {
   useShopifyStatus,
   useShopifyOverview,
@@ -22,9 +22,46 @@ import RecentOrdersTable from '../components/RecentOrdersTable';
 const ShopifyDashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [datePreset, setDatePreset] = useState('30d');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusBanner, setStatusBanner] = useState(null);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    const legacyConnected = searchParams.get('shopify_connected');
+
+    if (statusParam) {
+      switch (statusParam) {
+        case 'success':
+          setStatusBanner({ type: 'success', message: 'Shopify store connected successfully.' });
+          break;
+        case 'cancelled':
+          setStatusBanner({ type: 'error', message: 'Shopify authorization was cancelled.' });
+          break;
+        case 'invalid_hmac':
+          setStatusBanner({ type: 'error', message: 'Security validation failed.' });
+          break;
+        case 'invalid_state':
+          setStatusBanner({ type: 'error', message: 'Session expired. Please try again.' });
+          break;
+        case 'invalid_domain':
+          setStatusBanner({ type: 'error', message: 'Invalid store domain.' });
+          break;
+        case 'error':
+        default:
+          setStatusBanner({ type: 'error', message: 'Unable to connect Shopify store.' });
+          break;
+      }
+      searchParams.delete('status');
+      setSearchParams(searchParams);
+    } else if (legacyConnected) {
+      setStatusBanner({ type: 'success', message: 'Shopify store connected successfully.' });
+      searchParams.delete('shopify_connected');
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams]);
 
   // Check connection status first
   const { data: status, isLoading: isStatusLoading } = useShopifyStatus();
@@ -49,7 +86,6 @@ const ShopifyDashboard = () => {
     setIsRefreshing(true);
 
     try {
-      // Execute background force-refreshes with refresh=true query param
       await Promise.all([
         getShopifyOverview({ preset: datePreset, refresh: true }),
         getShopifySalesTrend({ preset: datePreset, refresh: true }),
@@ -57,7 +93,6 @@ const ShopifyDashboard = () => {
         getShopifyRecentOrders({ limit: 10, refresh: true })
       ]);
 
-      // Invalidate React Query cache to reflect fresh data
       queryClient.invalidateQueries({ queryKey: ['shopify'] });
     } catch (err) {
       console.error('Failed to manually refresh Shopify analytics:', err);
@@ -70,6 +105,25 @@ const ShopifyDashboard = () => {
   if (!isStatusLoading && !isConnected) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '2rem auto' }}>
+        {statusBanner && (
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: statusBanner.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              border: `1px solid ${statusBanner.type === 'success' ? 'var(--success)' : 'var(--danger)'}`,
+              color: statusBanner.type === 'success' ? 'var(--success)' : 'var(--danger)',
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            {statusBanner.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            <span>{statusBanner.message}</span>
+          </div>
+        )}
+
         <div
           className="card fade-in"
           style={{
@@ -114,7 +168,9 @@ const ShopifyDashboard = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              marginTop: '0.5rem'
+              marginTop: '0.5rem',
+              backgroundColor: '#95BF47',
+              borderColor: '#95BF47'
             }}
           >
             <LinkIcon size={18} />
@@ -127,6 +183,25 @@ const ShopifyDashboard = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {statusBanner && (
+        <div
+          style={{
+            padding: '0.75rem 1rem',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: statusBanner.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            border: `1px solid ${statusBanner.type === 'success' ? 'var(--success)' : 'var(--danger)'}`,
+            color: statusBanner.type === 'success' ? 'var(--success)' : 'var(--danger)',
+            fontSize: '0.9rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}
+        >
+          {statusBanner.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <span>{statusBanner.message}</span>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div
         style={{

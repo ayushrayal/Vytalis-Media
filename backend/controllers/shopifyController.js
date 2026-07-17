@@ -59,16 +59,17 @@ class ShopifyController {
    * GET /api/shopify/callback
    */
   static async callback(req, res, next) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     try {
       const result = await ShopifyService.handleOAuthCallback(req.query);
       CacheService.delByPattern(`shopify_*:${result.user._id}:*`);
 
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      return res.redirect(`${frontendUrl}/dashboard/shopify?shopify_connected=true`);
+      return res.redirect(`${frontendUrl}/dashboard/shopify?status=success`);
     } catch (error) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const errorMsg = encodeURIComponent(error.message || 'Shopify OAuth authorization failed.');
-      return res.redirect(`${frontendUrl}/profile?shopify_error=${errorMsg}`);
+      const statusType = error.errorType ? error.errorType.toLowerCase() : 'error';
+      const validStatuses = ['cancelled', 'invalid_hmac', 'invalid_state', 'invalid_domain', 'error'];
+      const statusParam = validStatuses.includes(statusType) ? statusType : 'error';
+      return res.redirect(`${frontendUrl}/dashboard/shopify?status=${statusParam}`);
     }
   }
 
