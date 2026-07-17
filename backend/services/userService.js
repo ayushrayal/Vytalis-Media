@@ -46,6 +46,55 @@ class UserService {
     await UserRepository.save(user);
     return user;
   }
+
+  /**
+   * Get user dashboard preferences
+   */
+  static async getDashboardPreferences(userId) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return user.dashboardPreferences || { version: 1, visibleCards: undefined, cardOrder: undefined };
+  }
+
+  /**
+   * Update user dashboard preferences
+   */
+  static async updateDashboardPreferences(userId, { visibleCards, cardOrder, version = 1 }) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    user.dashboardPreferences = {
+      version: version || 1,
+      visibleCards: Array.isArray(visibleCards) ? visibleCards : (user.dashboardPreferences?.visibleCards || []),
+      cardOrder: Array.isArray(cardOrder) ? cardOrder : (user.dashboardPreferences?.cardOrder || [])
+    };
+
+    await UserRepository.save(user);
+    return user.dashboardPreferences;
+  }
+
+  /**
+   * Reset user dashboard preferences
+   */
+  static async resetDashboardPreferences(userId) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    user.dashboardPreferences = {
+      version: 1,
+      visibleCards: undefined,
+      cardOrder: undefined
+    };
+
+    await UserRepository.save(user);
+    return user.dashboardPreferences;
+  }
 }
 
 export default UserService;

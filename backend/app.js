@@ -17,6 +17,7 @@ import campaignRouter from './routes/campaigns.js';
 import adsetRouter from './routes/adsets.js';
 import creativeRouter from './routes/creative.js';
 import aiRouter from './routes/ai.js';
+import userRouter from './routes/user.js';
 import debugRouter from './routes/debug.js';
 
 const app = express();
@@ -82,6 +83,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRouter);
+app.use('/api/users', userRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/campaigns', campaignRouter);
 app.use('/api/adsets', adsetRouter);

@@ -6,6 +6,8 @@ import { useDashboard } from '../context/DashboardContext';
 import { KpiSkeleton, ChartSkeleton } from '../components/LoadingSkeleton';
 import SectionError from '../components/SectionError';
 import { getFriendlyErrorMessage } from '../utils/errorHandler';
+import useDashboardPreferences from '../hooks/useDashboardPreferences';
+import CustomizeDashboardDrawer from '../components/CustomizeDashboardDrawer';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -29,12 +31,28 @@ import {
   MousePointer,
   RefreshCw,
   Download,
-  AlertCircle
+  AlertCircle,
+  Sliders
 } from 'lucide-react';
 import { formatCurrency, formatCompact } from '../utils/formatter';
 import MetricCard from '../components/MetricCard';
 
 const MetricDetailsModal = React.lazy(() => import('../components/MetricDetailsModal'));
+
+const MASTER_KPI_CARDS = [
+  { key: 'spend', title: 'Total Spend', icon: IndianRupee, isCurrency: true, isPercent: false },
+  { key: 'purchases', title: 'Purchases', icon: ShoppingCart, isCurrency: false, isPercent: false },
+  { key: 'cpa', title: 'Cost Per Acquisition (CPA)', icon: IndianRupee, isCurrency: true, isPercent: false },
+  { key: 'roas', title: 'Return on Ad Spend (ROAS)', icon: Percent, isCurrency: false, isPercent: false },
+  { key: 'purchaseConversionValue', title: 'Purchase Conv. Value', icon: IndianRupee, isCurrency: true, isPercent: false },
+  { key: 'ctr', title: 'Click-Through Rate (CTR)', icon: Percent, isCurrency: false, isPercent: true },
+  { key: 'cpm', title: 'Cost Per Mille (CPM)', icon: IndianRupee, isCurrency: true, isPercent: false },
+  { key: 'cpc', title: 'Cost Per Click (CPC)', icon: IndianRupee, isCurrency: true, isPercent: false },
+  { key: 'reach', title: 'Reach', icon: Eye, isCurrency: false, isPercent: false },
+  { key: 'impressions', title: 'Impressions', icon: Eye, isCurrency: false, isPercent: false },
+  { key: 'linkClicks', title: 'Link Clicks', icon: MousePointer, isCurrency: false, isPercent: false },
+  { key: 'frequency', title: 'Frequency', icon: RefreshCw, isCurrency: false, isPercent: false }
+];
 
 const Dashboard = () => {
   const {
@@ -46,6 +64,7 @@ const Dashboard = () => {
   } = useDashboard();
 
   const [selectedMetric, setSelectedMetric] = useState(null);
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
 
   const isCustomAndIncomplete = datePreset === 'custom' && (!customRange.since || !customRange.until);
 
@@ -64,6 +83,41 @@ const Dashboard = () => {
   });
 
   const error = overviewError ? getFriendlyErrorMessage(overviewError) : null;
+
+  // Dynamically aggregate all card definitions (Master + any future cards present in backend data)
+  const cardDefinitions = useMemo(() => {
+    const map = new Map();
+    MASTER_KPI_CARDS.forEach((c) => map.set(c.key, c));
+
+    if (data?.kpis) {
+      Object.keys(data.kpis).forEach((k) => {
+        if (!map.has(k)) {
+          const friendlyTitle = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+          map.set(k, {
+            key: k,
+            title: friendlyTitle,
+            icon: TrendingUp,
+            isCurrency: false,
+            isPercent: false
+          });
+        }
+      });
+    }
+    return Array.from(map.values());
+  }, [data?.kpis]);
+
+  const availableKeys = useMemo(() => cardDefinitions.map((c) => c.key), [cardDefinitions]);
+
+  // Customizable dashboard preferences hook
+  const {
+    visibleCards,
+    cardOrder,
+    saveStatus,
+    toggleCardVisibility,
+    reorderCards,
+    resetPreferences,
+    minVisibleCards
+  } = useDashboardPreferences(availableKeys);
 
   // Fetch trend timelines via React Query
   const { data: trendsRaw, isLoading: loadingTrends, error: trendsQueryError, refetch: fetchTrends } = useQuery({
@@ -182,6 +236,15 @@ const Dashboard = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
+              onClick={() => setIsCustomizeOpen(true)}
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              title="Customize Dashboard Cards"
+            >
+              <Sliders size={14} />
+              <span>Customize</span>
+            </button>
+            <button
               onClick={exportToCSV}
               className="btn btn-secondary"
               style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
@@ -230,18 +293,18 @@ const Dashboard = () => {
           gap: '1.5rem',
           marginBottom: '2rem'
         }}>
-          {renderKpiCard('Total Spend', 'spend', IndianRupee, true)}
-          {renderKpiCard('Purchases', 'purchases', ShoppingCart)}
-          {renderKpiCard('Cost Per Acquisition (CPA)', 'cpa', IndianRupee, true)}
-          {renderKpiCard('Return on Ad Spend (ROAS)', 'roas', Percent)}
-          {renderKpiCard('Purchase Conv. Value', 'purchaseConversionValue', IndianRupee, true)}
-          {renderKpiCard('Click-Through Rate (CTR)', 'ctr', Percent, false, true)}
-          {renderKpiCard('Cost Per Mille (CPM)', 'cpm', IndianRupee, true)}
-          {renderKpiCard('Cost Per Click (CPC)', 'cpc', IndianRupee, true)}
-          {renderKpiCard('Reach', 'reach', Eye)}
-          {renderKpiCard('Impressions', 'impressions', Eye)}
-          {renderKpiCard('Link Clicks', 'linkClicks', MousePointer)}
-          {renderKpiCard('Frequency', 'frequency', RefreshCw)}
+          {cardOrder
+            .filter((key) => visibleCards.includes(key))
+            .map((key) => {
+              const cardDef = cardDefinitions.find((c) => c.key === key) || {
+                key,
+                title: key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()),
+                icon: TrendingUp,
+                isCurrency: false,
+                isPercent: false
+              };
+              return renderKpiCard(cardDef.title, cardDef.key, cardDef.icon, cardDef.isCurrency, cardDef.isPercent);
+            })}
         </div>
       ) : (
         <div className="card flex-center" style={{ height: '200px', flexDirection: 'column', gap: '0.5rem', marginBottom: '2rem' }}>
@@ -366,6 +429,20 @@ const Dashboard = () => {
           />
         </React.Suspense>
       )}
+
+      {/* Customize Dashboard Drawer */}
+      <CustomizeDashboardDrawer
+        isOpen={isCustomizeOpen}
+        onClose={() => setIsCustomizeOpen(false)}
+        cardDefinitions={cardDefinitions}
+        visibleCards={visibleCards}
+        cardOrder={cardOrder}
+        onReorder={reorderCards}
+        onToggleVisibility={toggleCardVisibility}
+        onReset={resetPreferences}
+        saveStatus={saveStatus}
+        minVisibleCards={minVisibleCards}
+      />
 
       <style>{`
         @media (min-width: 1024px) {

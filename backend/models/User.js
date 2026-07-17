@@ -43,6 +43,20 @@ const userSchema = new mongoose.Schema({
   },
   lastLoginAt: {
     type: Date
+  },
+  dashboardPreferences: {
+    version: {
+      type: Number,
+      default: 1
+    },
+    visibleCards: {
+      type: [String],
+      default: undefined
+    },
+    cardOrder: {
+      type: [String],
+      default: undefined
+    }
   }
 }, {
   timestamps: true
