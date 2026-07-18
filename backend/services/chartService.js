@@ -7,7 +7,13 @@ class ChartService {
    * Fetch daily timeline data for Recharts
    */
   static async getDailyTrends(user, timeRange) {
-    const accountId = user.metaAccountId;
+    if (!user || !user.metaAccountId) {
+      const err = new Error('Meta Ad Account ID or Access Token is missing. Please update your profile.');
+      err.errorType = 'META_TOKEN_MISSING';
+      err.status = 400;
+      throw err;
+    }
+    const accountId = String(user.metaAccountId);
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
     
     // 1. Get Sales campaigns

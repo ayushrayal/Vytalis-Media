@@ -42,30 +42,30 @@ export const disconnectShopify = async () => {
 /**
  * Analytics API fetchers
  */
-export const getShopifyOverview = async ({ preset = '30d', refresh = false }) => {
+export const getShopifyOverview = async ({ preset = '30d', startDate = null, endDate = null, refresh = false }) => {
   const response = await api.get('/api/shopify/dashboard', {
-    params: { preset, refresh: refresh ? 'true' : 'false' }
+    params: { preset, startDate, endDate, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
 
-export const getShopifySalesTrend = async ({ preset = '30d', refresh = false }) => {
+export const getShopifySalesTrend = async ({ preset = '30d', startDate = null, endDate = null, refresh = false }) => {
   const response = await api.get('/api/shopify/sales-trend', {
-    params: { preset, refresh: refresh ? 'true' : 'false' }
+    params: { preset, startDate, endDate, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
 
-export const getShopifyTopProducts = async ({ preset = '30d', limit = 10, refresh = false }) => {
+export const getShopifyTopProducts = async ({ preset = '30d', page = 1, limit = 10, startDate = null, endDate = null, refresh = false }) => {
   const response = await api.get('/api/shopify/top-products', {
-    params: { preset, limit, refresh: refresh ? 'true' : 'false' }
+    params: { preset, page, limit, startDate, endDate, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
 
-export const getShopifyRecentOrders = async ({ limit = 10, refresh = false }) => {
+export const getShopifyRecentOrders = async ({ preset = '30d', page = 1, limit = 10, startDate = null, endDate = null, refresh = false }) => {
   const response = await api.get('/api/shopify/recent-orders', {
-    params: { limit, refresh: refresh ? 'true' : 'false' }
+    params: { preset, page, limit, startDate, endDate, refresh: refresh ? 'true' : 'false' }
   });
   return response.data;
 };
@@ -104,40 +104,44 @@ export const useDisconnectShopify = () => {
   });
 };
 
-export const useShopifyOverview = (preset = '30d', enabled = true) => {
+export const useShopifyOverview = (filterParams = {}, enabled = true) => {
+  const { preset = '30d', startDate, endDate } = typeof filterParams === 'string' ? { preset: filterParams } : filterParams;
   return useQuery({
-    queryKey: ['shopify', 'overview', preset],
-    queryFn: () => getShopifyOverview({ preset }),
+    queryKey: ['shopify', 'overview', preset, startDate, endDate],
+    queryFn: () => getShopifyOverview({ preset, startDate, endDate }),
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1
   });
 };
 
-export const useShopifySalesTrend = (preset = '30d', enabled = true) => {
+export const useShopifySalesTrend = (filterParams = {}, enabled = true) => {
+  const { preset = '30d', startDate, endDate } = typeof filterParams === 'string' ? { preset: filterParams } : filterParams;
   return useQuery({
-    queryKey: ['shopify', 'trend', preset],
-    queryFn: () => getShopifySalesTrend({ preset }),
+    queryKey: ['shopify', 'trend', preset, startDate, endDate],
+    queryFn: () => getShopifySalesTrend({ preset, startDate, endDate }),
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1
   });
 };
 
-export const useShopifyTopProducts = (preset = '30d', limit = 10, enabled = true) => {
+export const useShopifyTopProducts = (filterParams = {}, enabled = true) => {
+  const { preset = '30d', page = 1, limit = 10, startDate, endDate } = filterParams;
   return useQuery({
-    queryKey: ['shopify', 'products', preset, limit],
-    queryFn: () => getShopifyTopProducts({ preset, limit }),
+    queryKey: ['shopify', 'products', preset, startDate, endDate, page, limit],
+    queryFn: () => getShopifyTopProducts({ preset, page, limit, startDate, endDate }),
     enabled,
-    staleTime: 1000 * 60 * 10, // 10 minutes
+    staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1
   });
 };
 
-export const useShopifyRecentOrders = (limit = 10, enabled = true) => {
+export const useShopifyRecentOrders = (filterParams = {}, enabled = true) => {
+  const { preset = '30d', page = 1, limit = 10, startDate, endDate } = filterParams;
   return useQuery({
-    queryKey: ['shopify', 'orders', limit],
-    queryFn: () => getShopifyRecentOrders({ limit }),
+    queryKey: ['shopify', 'orders', preset, startDate, endDate, page, limit],
+    queryFn: () => getShopifyRecentOrders({ preset, page, limit, startDate, endDate }),
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1

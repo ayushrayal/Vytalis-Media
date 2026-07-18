@@ -175,13 +175,59 @@ class ShopifyController {
   }
 
   /**
-   * GET /api/shopify/dashboard?preset=30d&refresh=true
+   * Helper to parse and validate custom date range input.
+   */
+  static validateCustomDates(preset, startDate, endDate) {
+    if (preset !== 'custom') return null;
+
+    if (!startDate || !endDate) {
+      return 'Start date and End date are required for custom date range.';
+    }
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return 'Invalid custom date range format. Use YYYY-MM-DD.';
+    }
+
+    const start = new Date(`${startDate}T00:00:00.000Z`);
+    const end = new Date(`${endDate}T23:59:59.999Z`);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return 'Invalid custom date values.';
+    }
+
+    if (start > end) {
+      return 'Start Date cannot be after End Date.';
+    }
+
+    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays > 365) {
+      return 'Maximum custom date range is 365 days.';
+    }
+
+    return null;
+  }
+
+  /**
+   * GET /api/shopify/dashboard?preset=30d&startDate=...&endDate=...&refresh=true
    */
   static async getDashboardOverview(req, res, next) {
     try {
       const preset = req.query.preset || '30d';
+      const startDate = req.query.startDate || null;
+      const endDate = req.query.endDate || null;
+
+      const dateError = ShopifyController.validateCustomDates(preset, startDate, endDate);
+      if (dateError) {
+        return res.status(400).json({
+          success: false,
+          errorType: 'BAD_REQUEST',
+          message: dateError
+        });
+      }
+
       const forceRefresh = req.query.refresh === 'true';
-      const cacheKey = `shopify_dashboard:${req.user._id}:${preset}`;
+      const cacheKey = `shopify_dashboard:${req.user._id}:${preset}:${startDate || ''}:${endDate || ''}`;
 
       if (forceRefresh) {
         CacheService.del(cacheKey);
@@ -192,13 +238,15 @@ class ShopifyController {
         }
       }
 
-      const data = await ShopifyService.getDashboardOverview(req.user._id, preset);
+      const data = await ShopifyService.getDashboardOverview(req.user._id, preset, startDate, endDate);
       const payload = {
         success: true,
         message: 'Dashboard analytics overview retrieved.',
         data,
         meta: {
           preset,
+          startDate,
+          endDate,
           cached: false,
           lastUpdated: new Date().toISOString(),
           timestamp: new Date().toISOString()
@@ -214,13 +262,25 @@ class ShopifyController {
   }
 
   /**
-   * GET /api/shopify/sales-trend?preset=30d&refresh=true
+   * GET /api/shopify/sales-trend?preset=30d&startDate=...&endDate=...&refresh=true
    */
   static async getSalesTrend(req, res, next) {
     try {
       const preset = req.query.preset || '30d';
+      const startDate = req.query.startDate || null;
+      const endDate = req.query.endDate || null;
+
+      const dateError = ShopifyController.validateCustomDates(preset, startDate, endDate);
+      if (dateError) {
+        return res.status(400).json({
+          success: false,
+          errorType: 'BAD_REQUEST',
+          message: dateError
+        });
+      }
+
       const forceRefresh = req.query.refresh === 'true';
-      const cacheKey = `shopify_trend:${req.user._id}:${preset}`;
+      const cacheKey = `shopify_trend:${req.user._id}:${preset}:${startDate || ''}:${endDate || ''}`;
 
       if (forceRefresh) {
         CacheService.del(cacheKey);
@@ -231,13 +291,15 @@ class ShopifyController {
         }
       }
 
-      const data = await ShopifyService.getSalesTrend(req.user._id, preset);
+      const data = await ShopifyService.getSalesTrend(req.user._id, preset, startDate, endDate);
       const payload = {
         success: true,
         message: 'Sales trend analytics retrieved.',
         data,
         meta: {
           preset,
+          startDate,
+          endDate,
           cached: false,
           lastUpdated: new Date().toISOString(),
           timestamp: new Date().toISOString()
@@ -253,14 +315,28 @@ class ShopifyController {
   }
 
   /**
-   * GET /api/shopify/top-products?preset=30d&limit=10&refresh=true
+   * GET /api/shopify/top-products?preset=30d&page=1&limit=10&startDate=...&endDate=...&refresh=true
    */
   static async getTopProducts(req, res, next) {
     try {
       const preset = req.query.preset || '30d';
-      const limit = parseInt(req.query.limit || '10', 10);
+      const startDate = req.query.startDate || null;
+      const endDate = req.query.endDate || null;
+
+      const dateError = ShopifyController.validateCustomDates(preset, startDate, endDate);
+      if (dateError) {
+        return res.status(400).json({
+          success: false,
+          errorType: 'BAD_REQUEST',
+          message: dateError
+        });
+      }
+
+      const page = Math.max(Number(req.query.page) || 1, 1);
+      const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+
       const forceRefresh = req.query.refresh === 'true';
-      const cacheKey = `shopify_top_products:${req.user._id}:${preset}:${limit}`;
+      const cacheKey = `shopify_products:${req.user._id}:${preset}:${startDate || ''}:${endDate || ''}:${page}:${limit}`;
 
       if (forceRefresh) {
         CacheService.del(cacheKey);
@@ -271,21 +347,29 @@ class ShopifyController {
         }
       }
 
-      const data = await ShopifyService.getTopProducts(req.user._id, preset, limit);
+      const result = await ShopifyService.getTopProducts(req.user._id, preset, page, limit, startDate, endDate);
       const payload = {
         success: true,
         message: 'Top products analytics retrieved.',
-        data,
+        data: result.products,
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+        currency: result.currency,
         meta: {
           preset,
-          limit,
+          startDate,
+          endDate,
+          page: result.page,
+          limit: result.limit,
           cached: false,
           lastUpdated: new Date().toISOString(),
           timestamp: new Date().toISOString()
         }
       };
 
-      CacheService.set(cacheKey, { ...payload, meta: { ...payload.meta, cached: true } }, 600);
+      CacheService.set(cacheKey, { ...payload, meta: { ...payload.meta, cached: true } }, 300);
 
       res.status(200).json(payload);
     } catch (error) {
@@ -294,13 +378,28 @@ class ShopifyController {
   }
 
   /**
-   * GET /api/shopify/recent-orders?limit=10&refresh=true
+   * GET /api/shopify/recent-orders?preset=30d&page=1&limit=10&startDate=...&endDate=...&refresh=true
    */
   static async getRecentOrders(req, res, next) {
     try {
-      const limit = parseInt(req.query.limit || '10', 10);
+      const preset = req.query.preset || '30d';
+      const startDate = req.query.startDate || null;
+      const endDate = req.query.endDate || null;
+
+      const dateError = ShopifyController.validateCustomDates(preset, startDate, endDate);
+      if (dateError) {
+        return res.status(400).json({
+          success: false,
+          errorType: 'BAD_REQUEST',
+          message: dateError
+        });
+      }
+
+      const page = Math.max(Number(req.query.page) || 1, 1);
+      const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+
       const forceRefresh = req.query.refresh === 'true';
-      const cacheKey = `shopify_recent_orders:${req.user._id}:${limit}`;
+      const cacheKey = `shopify_orders:${req.user._id}:${preset}:${startDate || ''}:${endDate || ''}:${page}:${limit}`;
 
       if (forceRefresh) {
         CacheService.del(cacheKey);
@@ -311,13 +410,22 @@ class ShopifyController {
         }
       }
 
-      const data = await ShopifyService.getRecentOrders(req.user._id, limit);
+      const result = await ShopifyService.getRecentOrders(req.user._id, page, limit, preset, startDate, endDate);
       const payload = {
         success: true,
         message: 'Recent orders retrieved.',
-        data,
+        data: result.orders,
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+        currency: result.currency,
         meta: {
-          limit,
+          preset,
+          startDate,
+          endDate,
+          page: result.page,
+          limit: result.limit,
           cached: false,
           lastUpdated: new Date().toISOString(),
           timestamp: new Date().toISOString()

@@ -56,8 +56,8 @@ const ShopifyIntegrationCard = () => {
 
   /**
    * Normalize domain string consistently across UI inputs.
-   * e.g. "https://threadnbutton.myshopify.com/" -> "threadnbutton.myshopify.com"
-   * e.g. "threadnbutton" -> "threadnbutton.myshopify.com"
+   * e.g. "https://your-store.myshopify.com/" -> "your-store.myshopify.com"
+   * e.g. "your-store" -> "your-store.myshopify.com"
    */
   const normalizeDomainInput = (rawInput) => {
     if (!rawInput || typeof rawInput !== 'string') return '';
@@ -329,7 +329,7 @@ const ShopifyIntegrationCard = () => {
               <Globe size={18} color="var(--text-tertiary)" style={{ marginRight: '0.75rem' }} />
               <input
                 type="text"
-                placeholder="threadnbutton.myshopify.com"
+                placeholder="your-store.myshopify.com"
                 value={storeDomain}
                 onChange={(e) => setStoreDomain(e.target.value)}
                 required
@@ -338,7 +338,7 @@ const ShopifyIntegrationCard = () => {
               />
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              Enter your store handle (e.g. <code>threadnbutton.myshopify.com</code> or <code>threadnbutton</code>). No access token required.
+              Enter your store handle (e.g. <code>your-store.myshopify.com</code> or <code>your-store</code>). No access token required.
             </span>
           </div>
 

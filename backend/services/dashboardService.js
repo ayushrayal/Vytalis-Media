@@ -9,6 +9,12 @@ class DashboardService {
    * Compose the main dashboard overview KPIs, campaigns count, and period comparisons
    */
   static async getOverview(user, datePreset, customRange = null) {
+    if (!user || !user.metaAccountId) {
+      const err = new Error('Meta Ad Account ID or Access Token is missing. Please update your profile.');
+      err.errorType = 'META_TOKEN_MISSING';
+      err.status = 400;
+      throw err;
+    }
     const accountId = user.metaAccountId;
     const userId = user.id || user._id?.toString();
 

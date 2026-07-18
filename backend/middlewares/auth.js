@@ -63,9 +63,9 @@ const authMiddleware = async (req, res, next) => {
     if (!user) {
       failureReason = 'Session invalid. User no longer exists.';
       logAuthAttempt(req, tokenSource, token, jwtVerificationResult, userId, false, failureReason);
-      return res.status(401).json({
+      return res.status(404).json({
         success: false,
-        errorType: 'UNAUTHORIZED',
+        errorType: 'USER_NOT_FOUND',
         message: failureReason
       });
     }

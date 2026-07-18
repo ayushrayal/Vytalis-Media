@@ -11,10 +11,9 @@ import {
 } from 'recharts';
 import { AlertCircle, TrendingUp } from 'lucide-react';
 import SalesTrendChartSkeleton from './skeletons/SalesTrendChartSkeleton';
-import RangeSelector from './RangeSelector';
 import { formatShopifyCurrency } from '../utils/formatter';
 
-const SalesTrendChart = ({ data, isLoading, isError, error, preset, onPresetChange }) => {
+const SalesTrendChart = ({ data, isLoading, isError, error }) => {
   if (isLoading) {
     return <SalesTrendChartSkeleton />;
   }
@@ -53,7 +52,7 @@ const SalesTrendChart = ({ data, isLoading, isError, error, preset, onPresetChan
         gap: '1.25rem'
       }}
     >
-      {/* Header & Preset Selector */}
+      {/* Header */}
       <div
         style={{
           display: 'flex',
@@ -67,8 +66,6 @@ const SalesTrendChart = ({ data, isLoading, isError, error, preset, onPresetChan
           <TrendingUp size={20} color="var(--primary)" />
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Sales & Orders Trend</h3>
         </div>
-
-        <RangeSelector value={preset} onChange={onPresetChange} />
       </div>
 
       {/* Recharts Line Chart */}

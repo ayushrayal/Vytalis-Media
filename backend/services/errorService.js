@@ -21,48 +21,45 @@ class ErrorService {
     // Check if error is from Facebook Graph API (axios/fetch structure)
     const fbError = error.response?.data?.error || error.error || {};
     const message = fbError.message || error.message || '';
-    const code = fbError.code;
-    const subcode = fbError.error_subcode;
+    const code = fbError.code || error.metaErrorCode;
+    const subcode = fbError.error_subcode || error.metaSubcode;
 
-    let userFriendlyMessage = 'Something went wrong while loading this section.';
+    let userFriendlyMessage = 'Meta dashboard service unavailable.';
+    let errorType = error.errorType || 'META_API_ERROR';
     let actionRequired = 'none';
 
-    // 1. Authentication Error
-    if (code === 190 || code === 102 || subcode === 463 || subcode === 467) {
-      userFriendlyMessage = 'Your Meta account connection has expired. Please reconnect your account.';
+    if (errorType === 'META_TOKEN_MISSING' || message.toLowerCase().includes('missing')) {
+      errorType = 'META_TOKEN_MISSING';
+      userFriendlyMessage = 'Meta Ad Account ID or Access Token is missing. Please update your profile.';
       actionRequired = 'reauthenticate';
-    } 
-    // 2. Rate Limit Error
-    else if (
-      code === 17 || 
-      code === 4 || 
-      code === 613 || 
-      subcode === 80004 || 
-      message.toLowerCase().includes('rate limit') || 
-      message.toLowerCase().includes('too many calls')
+    } else if (
+      errorType === 'META_TOKEN_EXPIRED' ||
+      code === 190 || code === 102 || subcode === 463 || subcode === 467 ||
+      message.toLowerCase().includes('token') || message.toLowerCase().includes('session')
     ) {
-      userFriendlyMessage = 'Meta is temporarily limiting requests. Showing the most recently available data. Please refresh in a few minutes.';
-      actionRequired = 'wait';
-    } 
-    // 3. Reduce Data Error
-    else if (
-      message.toLowerCase().includes('reduce the amount of data') || 
-      message.toLowerCase().includes('too much data') || 
-      code === 1
+      errorType = 'META_TOKEN_EXPIRED';
+      userFriendlyMessage = 'Meta access token has expired or is invalid. Please reconnect your account.';
+      actionRequired = 'reauthenticate';
+    } else if (
+      errorType === 'META_ACCOUNT_NOT_FOUND' ||
+      (code === 100 && message.toLowerCase().includes('account'))
     ) {
-      userFriendlyMessage = 'This section is temporarily unavailable because Meta could not process the request.';
-      actionRequired = 'reduce_data';
-    }
-    // 4. Network Error
-    else if (
-      !code && 
-      (message.toLowerCase().includes('fetch') || 
-       message.toLowerCase().includes('network') || 
-       message.toLowerCase().includes('timeout') || 
-       message.toLowerCase().includes('connect'))
+      errorType = 'META_ACCOUNT_NOT_FOUND';
+      userFriendlyMessage = 'Meta ad account not found or access denied.';
+    } else if (
+      errorType === 'META_TIMEOUT' ||
+      (!code && (message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network') || message.toLowerCase().includes('timeout') || message.toLowerCase().includes('connect') || message.toLowerCase().includes('econnreset') || message.toLowerCase().includes('etimedout')))
     ) {
-      userFriendlyMessage = 'Unable to reach Meta servers. Please try again.';
+      errorType = 'META_TIMEOUT';
+      userFriendlyMessage = 'Meta Graph API request timed out.';
       actionRequired = 'retry';
+    } else if (
+      code === 17 || code === 4 || code === 613 || subcode === 80004 ||
+      message.toLowerCase().includes('rate limit') || message.toLowerCase().includes('too many calls')
+    ) {
+      errorType = 'META_API_ERROR';
+      userFriendlyMessage = 'Meta is temporarily limiting requests. Please try again in a few minutes.';
+      actionRequired = 'wait';
     }
 
     const diagnostics = process.env.NODE_ENV !== 'production'
@@ -78,11 +75,10 @@ class ErrorService {
 
     return {
       success: false,
-      errorType: 'META_API_ERROR',
+      errorType,
       message: userFriendlyMessage,
       actionRequired,
-      diagnostics,
-      details: process.env.NODE_ENV === 'development' ? fbError : undefined
+      ...(diagnostics ? { diagnostics } : {})
     };
   }
 
@@ -110,10 +106,38 @@ class ErrorService {
 
     const requestId = req.requestId || '';
 
-    // Determine type of error
-    if (err.errorType === 'META_API_ERROR' || err.config?.url?.includes('graph.facebook.com')) {
+    // Database errors (Mongoose/MongoDB)
+    if (
+      err.name === 'MongoError' ||
+      err.name === 'MongoServerError' ||
+      err.name === 'CastError' ||
+      err.name === 'ValidationError' ||
+      err.errorType === 'DATABASE_ERROR'
+    ) {
+      ErrorService.log('DATABASE', err, { url: req.originalUrl, method: req.method, requestId });
+      return res.status(500).json({
+        success: false,
+        errorType: 'DATABASE_ERROR',
+        message: 'Database operation failed.',
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    }
+
+    // Meta API & Token errors
+    if (
+      err.errorType?.startsWith('META_') ||
+      err.errorType === 'USER_NOT_FOUND' ||
+      err.config?.url?.includes('graph.facebook.com')
+    ) {
       const formatted = ErrorService.formatMetaError(err, requestId);
-      const status = err.status || 502;
+      let status = err.status;
+      if (!status) {
+        if (formatted.errorType === 'META_TOKEN_MISSING') status = 400;
+        else if (formatted.errorType === 'META_TOKEN_EXPIRED') status = 401;
+        else if (formatted.errorType === 'META_ACCOUNT_NOT_FOUND' || formatted.errorType === 'USER_NOT_FOUND') status = 404;
+        else if (formatted.errorType === 'META_TIMEOUT' || formatted.errorType === 'META_API_ERROR') status = 503;
+        else status = 503;
+      }
 
       // Dev-only logs
       if (process.env.NODE_ENV !== 'production') {
@@ -138,27 +162,12 @@ ${err.stack}
 --------------------------------------------------`);
       }
 
-      // Add dev-only diagnostics on HTTP 502
-      if (status === 502 && process.env.NODE_ENV !== 'production') {
-        const fbError = err.response?.data?.error || {};
-        formatted.devDiagnostics = {
-          errorSource: err.errorType || 'Meta Ads API',
-          controller: err.controller || 'N/A',
-          service: err.service || 'N/A',
-          metaEndpoint: err.metaEndpoint || 'N/A',
-          metaErrorCode: err.metaErrorCode || fbError.code || 'N/A',
-          metaSubcode: err.metaSubcode || fbError.error_subcode || 'N/A',
-          metaMessage: fbError.message || err.message,
-          originalStack: err.stack
-        };
-      }
-
       return res.status(status).json(formatted);
     }
 
     if (err.errorType === 'OPENAI_API_ERROR' || err.config?.url?.includes('api.openai.com')) {
       const formatted = ErrorService.formatOpenAIError(err, requestId);
-      return res.status(err.status || 502).json(formatted);
+      return res.status(err.status || 503).json(formatted);
     }
 
     // Default server error
@@ -166,7 +175,7 @@ ${err.stack}
     
     res.status(err.status || 500).json({
       success: false,
-      errorType: 'INTERNAL_SERVER_ERROR',
+      errorType: err.errorType || 'INTERNAL_SERVER_ERROR',
       message: err.message || 'An unexpected internal server error occurred.',
       details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });

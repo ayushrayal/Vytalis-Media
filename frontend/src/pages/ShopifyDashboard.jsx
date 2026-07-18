@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ShoppingBag, RefreshCw, AlertCircle, CheckCircle2, Clock, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { ShoppingBag, RefreshCw, AlertCircle, CheckCircle2, Clock, Link as LinkIcon, Calendar, Filter } from 'lucide-react';
 import {
   useShopifyStatus,
   useShopifyOverview,
@@ -24,7 +24,18 @@ const ShopifyDashboard = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Global Filter State
   const [datePreset, setDatePreset] = useState('30d');
+  const [startDateInput, setStartDateInput] = useState('');
+  const [endDateInput, setEndDateInput] = useState('');
+  const [appliedStartDate, setAppliedStartDate] = useState(null);
+  const [appliedEndDate, setAppliedEndDate] = useState(null);
+  const [dateError, setDateError] = useState(null);
+
+  // Server-Side Pagination States
+  const [topProductsPage, setTopProductsPage] = useState(1);
+  const [recentOrdersPage, setRecentOrdersPage] = useState(1);
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusBanner, setStatusBanner] = useState(null);
 
@@ -67,11 +78,57 @@ const ShopifyDashboard = () => {
   const { data: status, isLoading: isStatusLoading } = useShopifyStatus();
   const isConnected = !!status?.connected;
 
+  // Active Global Filter Params
+  const filterParams = {
+    preset: datePreset,
+    startDate: datePreset === 'custom' ? appliedStartDate : null,
+    endDate: datePreset === 'custom' ? appliedEndDate : null
+  };
+
   // Independent widget queries (only enabled if store is connected)
-  const overviewQuery = useShopifyOverview(datePreset, isConnected);
-  const trendQuery = useShopifySalesTrend(datePreset, isConnected);
-  const productsQuery = useShopifyTopProducts(datePreset, 10, isConnected);
-  const ordersQuery = useShopifyRecentOrders(10, isConnected);
+  const overviewQuery = useShopifyOverview(filterParams, isConnected);
+  const trendQuery = useShopifySalesTrend(filterParams, isConnected);
+  const productsQuery = useShopifyTopProducts({ ...filterParams, page: topProductsPage, limit: 10 }, isConnected);
+  const ordersQuery = useShopifyRecentOrders({ ...filterParams, page: recentOrdersPage, limit: 10 }, isConnected);
+
+  // Handle Preset Changes
+  const handlePresetSelect = (preset) => {
+    setDateError(null);
+    setDatePreset(preset);
+    setTopProductsPage(1);
+    setRecentOrdersPage(1);
+  };
+
+  // Handle Custom Date Apply
+  const handleApplyCustomDates = (e) => {
+    e.preventDefault();
+    setDateError(null);
+
+    if (!startDateInput || !endDateInput) {
+      setDateError('Please select both Start Date and End Date.');
+      return;
+    }
+
+    const start = new Date(startDateInput);
+    const end = new Date(endDateInput);
+
+    if (start > end) {
+      setDateError('Start Date cannot be after End Date.');
+      return;
+    }
+
+    const diffMs = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays > 365) {
+      setDateError('Maximum custom date range is 365 days.');
+      return;
+    }
+
+    setAppliedStartDate(startDateInput);
+    setAppliedEndDate(endDateInput);
+    setTopProductsPage(1);
+    setRecentOrdersPage(1);
+  };
 
   // Derive last updated timestamp from available query metadata
   const lastUpdated =
@@ -87,10 +144,10 @@ const ShopifyDashboard = () => {
 
     try {
       await Promise.all([
-        getShopifyOverview({ preset: datePreset, refresh: true }),
-        getShopifySalesTrend({ preset: datePreset, refresh: true }),
-        getShopifyTopProducts({ preset: datePreset, limit: 10, refresh: true }),
-        getShopifyRecentOrders({ limit: 10, refresh: true })
+        getShopifyOverview({ ...filterParams, refresh: true }),
+        getShopifySalesTrend({ ...filterParams, refresh: true }),
+        getShopifyTopProducts({ ...filterParams, page: topProductsPage, limit: 10, refresh: true }),
+        getShopifyRecentOrders({ ...filterParams, page: recentOrdersPage, limit: 10, refresh: true })
       ]);
 
       queryClient.invalidateQueries({ queryKey: ['shopify'] });
@@ -206,7 +263,7 @@ const ShopifyDashboard = () => {
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
+          justify: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '1rem',
@@ -267,6 +324,138 @@ const ShopifyDashboard = () => {
         </div>
       </div>
 
+      {/* Global Reporting Period Bar */}
+      <div
+        className="card"
+        style={{
+          padding: '1rem 1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          backgroundColor: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Filter size={18} color="var(--primary)" />
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>Reporting Period:</span>
+          </div>
+
+          {/* Preset Pill Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {[
+              { id: 'today', label: 'Today' },
+              { id: 'yesterday', label: 'Yesterday' },
+              { id: '7d', label: 'Last 7 Days' },
+              { id: '30d', label: 'Last 30 Days' },
+              { id: 'custom', label: 'Custom Date Range' }
+            ].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handlePresetSelect(p.id)}
+                style={{
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.8rem',
+                  fontWeight: datePreset === p.id ? 700 : 500,
+                  backgroundColor: datePreset === p.id ? 'var(--primary)' : 'var(--bg-tertiary)',
+                  color: datePreset === p.id ? '#ffffff' : 'var(--text-secondary)',
+                  border: '1px solid',
+                  borderColor: datePreset === p.id ? 'var(--primary)' : 'transparent',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Date Inputs */}
+        {datePreset === 'custom' && (
+          <form
+            onSubmit={handleApplyCustomDates}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              flexWrap: 'wrap',
+              paddingTop: '0.5rem',
+              borderTop: '1px solid var(--border-color)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Calendar size={16} color="var(--text-tertiary)" />
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Start:</label>
+              <input
+                type="date"
+                value={startDateInput}
+                onChange={(e) => setStartDateInput(e.target.value)}
+                style={{
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8rem'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>End:</label>
+              <input
+                type="date"
+                value={endDateInput}
+                onChange={(e) => setEndDateInput(e.target.value)}
+                style={{
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8rem'
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{
+                padding: '0.35rem 0.85rem',
+                fontSize: '0.8rem',
+                backgroundColor: 'var(--primary)'
+              }}
+            >
+              Apply Filter
+            </button>
+          </form>
+        )}
+
+        {/* Custom Date Validation Error */}
+        {dateError && (
+          <div
+            style={{
+              padding: '0.5rem 0.75rem',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid var(--danger)',
+              color: 'var(--danger)',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
+          >
+            <AlertCircle size={15} />
+            <span>{dateError}</span>
+          </div>
+        )}
+      </div>
+
       {/* 1. Overview KPI Cards */}
       <ShopifyOverviewCards
         data={overviewQuery.data}
@@ -281,8 +470,6 @@ const ShopifyDashboard = () => {
         isLoading={trendQuery.isLoading}
         isError={trendQuery.isError}
         error={trendQuery.error}
-        preset={datePreset}
-        onPresetChange={setDatePreset}
       />
 
       {/* 3. Tables Grid: Top Products & Recent Orders */}
@@ -299,6 +486,8 @@ const ShopifyDashboard = () => {
           isLoading={productsQuery.isLoading}
           isError={productsQuery.isError}
           error={productsQuery.error}
+          page={topProductsPage}
+          onPageChange={setTopProductsPage}
         />
 
         <RecentOrdersTable
@@ -306,6 +495,8 @@ const ShopifyDashboard = () => {
           isLoading={ordersQuery.isLoading}
           isError={ordersQuery.isError}
           error={ordersQuery.error}
+          page={recentOrdersPage}
+          onPageChange={setRecentOrdersPage}
         />
       </div>
     </div>

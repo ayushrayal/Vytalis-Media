@@ -45,15 +45,54 @@ class ShopifyService {
   }
 
   /**
-   * Helper to convert date presets (7d, 30d, 90d) to ISO date filter strings.
+   * Helper to convert date presets (today, yesterday, 7d, 30d, custom) to Shopify GraphQL query filters.
    */
-  static getPresetDateFilter(preset = '30d') {
+  static getPresetDateFilter(preset = '30d', startDate = null, endDate = null) {
+    const now = new Date();
+
+    if (preset === 'today') {
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      return {
+        queryFilter: `created_at:>=${todayStart.toISOString()}`,
+        days: 1,
+        startDate: todayStart.toISOString().split('T')[0],
+        endDate: now.toISOString().split('T')[0]
+      };
+    }
+
+    if (preset === 'yesterday') {
+      const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+      const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+      return {
+        queryFilter: `created_at:>=${yesterdayStart.toISOString()} created_at:<=${yesterdayEnd.toISOString()}`,
+        days: 1,
+        startDate: yesterdayStart.toISOString().split('T')[0],
+        endDate: yesterdayEnd.toISOString().split('T')[0]
+      };
+    }
+
+    if (preset === 'custom' && startDate && endDate) {
+      const start = new Date(`${startDate}T00:00:00.000Z`);
+      const end = new Date(`${endDate}T23:59:59.999Z`);
+      const diffMs = Math.max(end.getTime() - start.getTime(), 0);
+      const days = Math.max(Math.ceil(diffMs / (1000 * 60 * 60 * 24)), 1);
+
+      return {
+        queryFilter: `created_at:>=${start.toISOString()} created_at:<=${end.toISOString()}`,
+        days,
+        startDate,
+        endDate
+      };
+    }
+
     const days = preset === '7d' ? 7 : preset === '90d' ? 90 : 30;
     const date = new Date();
     date.setDate(date.getDate() - days);
     return {
-      isoString: date.toISOString(),
-      days
+      queryFilter: `created_at:>=${date.toISOString()}`,
+      days,
+      startDate: date.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0]
     };
   }
 
@@ -360,10 +399,9 @@ class ShopifyService {
   /**
    * Fetch Overview KPI Metrics for Dashboard.
    */
-  static async getDashboardOverview(userId, preset = '30d') {
+  static async getDashboardOverview(userId, preset = '30d', startDate = null, endDate = null) {
     const { storeDomain, accessToken, currency } = await this.getDecryptedUserShopify(userId);
-    const { isoString } = this.getPresetDateFilter(preset);
-    const queryFilter = `created_at:>=${isoString}`;
+    const { queryFilter } = this.getPresetDateFilter(preset, startDate, endDate);
 
     const data = await ShopifyClient.graphqlRequest(storeDomain, accessToken, GET_DASHBOARD_ANALYTICS_QUERY, { queryFilter });
     const orderEdges = data?.orders?.edges || [];
@@ -408,19 +446,19 @@ class ShopifyService {
   /**
    * Fetch Sales Trend timeline aggregated by date.
    */
-  static async getSalesTrend(userId, preset = '30d') {
+  static async getSalesTrend(userId, preset = '30d', startDate = null, endDate = null) {
     const { storeDomain, accessToken, currency } = await this.getDecryptedUserShopify(userId);
-    const { isoString, days } = this.getPresetDateFilter(preset);
-    const queryFilter = `created_at:>=${isoString}`;
+    const { queryFilter, days, startDate: resolvedStart, endDate: resolvedEnd } = this.getPresetDateFilter(preset, startDate, endDate);
 
     const data = await ShopifyClient.graphqlRequest(storeDomain, accessToken, GET_SALES_TREND_QUERY, { queryFilter });
     const orderEdges = data?.orders?.edges || [];
 
     const dailyMap = {};
-    const now = new Date();
+    const endAnchor = resolvedEnd ? new Date(`${resolvedEnd}T00:00:00.000Z`) : new Date();
+
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(now.getDate() - i);
+      const d = new Date(endAnchor);
+      d.setDate(d.getDate() - i);
       const dateKey = d.toISOString().split('T')[0];
       dailyMap[dateKey] = { date: dateKey, revenue: 0, orders: 0 };
     }
@@ -448,12 +486,12 @@ class ShopifyService {
   }
 
   /**
-   * Fetch Top Selling Products.
+   * Fetch Top Selling Products (Server-Side Paginated).
+   * TODO V2: Migrate to Shopify GraphQL cursor-based pagination (first/after) for large catalog scalability.
    */
-  static async getTopProducts(userId, preset = '30d', limit = 10) {
+  static async getTopProducts(userId, preset = '30d', page = 1, limit = 10, startDate = null, endDate = null) {
     const { storeDomain, accessToken, currency } = await this.getDecryptedUserShopify(userId);
-    const { isoString } = this.getPresetDateFilter(preset);
-    const queryFilter = `created_at:>=${isoString}`;
+    const { queryFilter } = this.getPresetDateFilter(preset, startDate, endDate);
 
     const data = await ShopifyClient.graphqlRequest(storeDomain, accessToken, GET_TOP_PRODUCTS_QUERY, { queryFilter });
     const orderEdges = data?.orders?.edges || [];
@@ -485,30 +523,40 @@ class ShopifyService {
       });
     });
 
-    const products = Object.values(productMap)
+    const allProducts = Object.values(productMap)
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, limit)
       .map(p => ({
         ...p,
         revenue: parseFloat(p.revenue.toFixed(2))
       }));
 
+    const total = allProducts.length;
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+    const paginatedProducts = allProducts.slice((safePage - 1) * limit, safePage * limit);
+
     return {
-      products,
+      products: paginatedProducts,
+      page: safePage,
+      limit,
+      total,
+      totalPages,
       currency
     };
   }
 
   /**
-   * Fetch 10 Recent Orders.
+   * Fetch Recent Orders (Server-Side Paginated).
+   * TODO V2: Migrate to Shopify GraphQL cursor-based pagination (first/after) for high-volume order scalability.
    */
-  static async getRecentOrders(userId, limit = 10) {
+  static async getRecentOrders(userId, page = 1, limit = 10, preset = '30d', startDate = null, endDate = null) {
     const { storeDomain, accessToken, currency } = await this.getDecryptedUserShopify(userId);
+    const { queryFilter } = this.getPresetDateFilter(preset, startDate, endDate);
 
-    const data = await ShopifyClient.graphqlRequest(storeDomain, accessToken, GET_RECENT_ORDERS_QUERY, { first: limit });
+    const data = await ShopifyClient.graphqlRequest(storeDomain, accessToken, GET_DASHBOARD_ANALYTICS_QUERY, { queryFilter });
     const orderEdges = data?.orders?.edges || [];
 
-    const orders = orderEdges.map(({ node }) => ({
+    const allOrders = orderEdges.map(({ node }) => ({
       id: node.id,
       orderNumber: node.name || 'N/A',
       createdAt: node.createdAt,
@@ -518,8 +566,17 @@ class ShopifyService {
       fulfillmentStatus: node.displayFulfillmentStatus || 'UNFULFILLED'
     }));
 
+    const total = allOrders.length;
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+    const paginatedOrders = allOrders.slice((safePage - 1) * limit, safePage * limit);
+
     return {
-      orders,
+      orders: paginatedOrders,
+      page: safePage,
+      limit,
+      total,
+      totalPages,
       currency
     };
   }

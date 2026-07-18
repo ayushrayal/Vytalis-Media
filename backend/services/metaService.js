@@ -72,13 +72,20 @@ class MetaService {
   static async request(endpoint, user, options = {}) {
     if (!user) {
       const err = new Error('No user context provided for Meta Ads API request.');
-      err.errorType = 'META_API_ERROR';
+      err.errorType = 'USER_NOT_FOUND';
+      err.status = 404;
       throw err;
     }
 
+    console.log({
+      hasMetaToken: !!user?.metaAccessToken,
+      hasAccountId: !!user?.metaAccountId
+    });
+
     if (!user.metaAccountId || !user.metaAccessToken) {
       const err = new Error('Meta Ad Account ID or Access Token is missing. Please update your profile.');
-      err.errorType = 'META_API_ERROR';
+      err.errorType = 'META_TOKEN_MISSING';
+      err.status = 400;
       throw err;
     }
 
@@ -87,7 +94,8 @@ class MetaService {
       accessToken = encryption.decrypt(user.metaAccessToken);
     } catch (decryptError) {
       const err = new Error('Failed to decrypt Meta Access Token. Please re-enter your token in profile settings.');
-      err.errorType = 'META_API_ERROR';
+      err.errorType = 'META_TOKEN_EXPIRED';
+      err.status = 401;
       err.originalError = decryptError;
       throw err;
     }
@@ -246,7 +254,18 @@ class MetaService {
           if (!response.ok) {
             const error = new Error(data.error?.message || 'Graph API request failed');
             error.response = { data };
-            error.errorType = 'META_API_ERROR';
+            const errCode = data.error?.code;
+            const errSubcode = data.error?.error_subcode;
+            if (errCode === 190 || errCode === 102 || errSubcode === 463 || errSubcode === 467) {
+              error.errorType = 'META_TOKEN_EXPIRED';
+              error.status = 401;
+            } else if (errCode === 100 && (data.error?.message || '').toLowerCase().includes('account')) {
+              error.errorType = 'META_ACCOUNT_NOT_FOUND';
+              error.status = 404;
+            } else {
+              error.errorType = 'META_API_ERROR';
+              error.status = 503;
+            }
             error.metaRequestId = requestId;
             error.metaGraphVersion = metaApi.version;
             error.metaErrorCode = data.error?.code;

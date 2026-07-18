@@ -8,7 +8,13 @@ class CampaignService {
    * Fetch campaigns for a given account and filter by OUTCOME_SALES objective
    */
   static async getSalesCampaigns(user) {
-    const accountId = user.metaAccountId;
+    if (!user || !user.metaAccountId) {
+      const err = new Error('Meta Ad Account ID or Access Token is missing. Please update your profile.');
+      err.errorType = 'META_TOKEN_MISSING';
+      err.status = 400;
+      throw err;
+    }
+    const accountId = String(user.metaAccountId);
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
     const endpoint = `${formattedAccountId}/campaigns`;
     
@@ -22,6 +28,10 @@ class CampaignService {
     // Filter campaigns by OUTCOME_SALES objective only (ignore others as required)
     const campaigns = response.data || [];
     return campaigns.filter(c => c.objective === 'OUTCOME_SALES');
+  }
+
+  static async getCampaigns(user) {
+    return this.getSalesCampaigns(user);
   }
 
   /**

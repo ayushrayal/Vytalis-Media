@@ -80,7 +80,13 @@ class InsightService {
    * Fetch ad-level insights for a given time range, filtered to OUTCOME_SALES campaigns
    */
   static async getAdInsights(user, timeRange, adIds = null) {
-    const accountId = user.metaAccountId;
+    if (!user || !user.metaAccountId) {
+      const err = new Error('Meta Ad Account ID or Access Token is missing. Please update your profile.');
+      err.errorType = 'META_TOKEN_MISSING';
+      err.status = 400;
+      throw err;
+    }
+    const accountId = String(user.metaAccountId);
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
     
     // 1. Get campaigns filtered by OUTCOME_SALES
@@ -116,7 +122,13 @@ class InsightService {
    * Fetch de-duplicated account-level insights for OUTCOME_SALES campaigns
    */
   static async getAccountAggregatedInsights(user, timeRange) {
-    const accountId = user.metaAccountId;
+    if (!user || !user.metaAccountId) {
+      const err = new Error('Meta Ad Account ID or Access Token is missing. Please update your profile.');
+      err.errorType = 'META_TOKEN_MISSING';
+      err.status = 400;
+      throw err;
+    }
+    const accountId = String(user.metaAccountId);
     const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
     
     // 1. Get campaigns filtered by OUTCOME_SALES
